@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client
+  annotations:
+    k8s.v1.cni.cncf.io/networks: {{ list
+      (dict "name" (index .Values.interfaces 0).name "interface" "net1" "ips" (list (printf "%s%s" (index .Values.interfaces 0).ip (index .Values.interfaces 0).subnet)))
+      | toJson | quote }}
+spec:
+  nodeSelector:
+    {{- toYaml .Values.nodeSelector | nindent 4 }}
+  containers:
+    - name: client
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        privileged: true
+      command:
+        - /bin/sh
+        - -c
+        - |
+          sleep infinity
