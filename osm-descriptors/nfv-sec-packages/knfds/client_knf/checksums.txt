@@ -1,0 +1,1 @@
+1679224ede158b2286d958a962b721a1	client_knf/client_vnfd.yaml

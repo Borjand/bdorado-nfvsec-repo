@@ -1,0 +1,1 @@
+f4e530733fb97d54cbee230e749e8f4c	access_router_knf/access_router_vnfd.yaml

@@ -1,0 +1,18 @@
+vnfd:
+  description: Client KNF with single KDU using a helm-chart
+  df:
+  - id: default-df
+  ext-cpd:
+  - id: mgmt-ext
+    k8s-cluster-net: mgmtnet
+  id: client_knf
+  k8s-cluster:
+    nets:
+    - id: mgmtnet
+  kdu:
+  - name: access_router_knf
+    helm-chart: https://borjand.github.io/bdorado-nfvsec-repo/client-1.0.0.tgz
+  mgmt-cp: mgmt-ext
+  product-name: client_knf
+  provider: uc3m
+  version: 1.0
