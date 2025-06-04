@@ -1,0 +1,16 @@
+[
+  {
+    "vl_id": "ns_779.vl_001",
+    "neighbours": [
+      {"vnf_id": "VNF_A", "interface": "2", "publickey": "vnfa-PKEY"},
+      {"vnf_id": "VNF_B", "interface": "2", "publickey": "vfnb-PKEY"}
+    ]
+  },
+  {
+    "vl_id": "ns_779.vl_002",
+    "neighbours": [
+      {"vnf_id": "VNF_C", "interface": "1", "publickey": "vnfc-PKEY"},
+      {"vnf_id": "VNF_D", "interface": "1", "publickey": "vnfd-PKEY"}
+    ]
+  }
+]
