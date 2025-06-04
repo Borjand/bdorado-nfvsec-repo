@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 # Install system tools required for MACsec and networking
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    iproute2 \
+    iproute2 iputils-ping tcpdump \
   && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container
