@@ -9,14 +9,11 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from pyroute2 import IPRoute
 
-# --- Logging Configuration ---
-logging.basicConfig(
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    level=logging.INFO
-)
+# --- Logging setup ---
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- Environment Variables ---
+# --- Read environment variables ---
 vnf_id = os.getenv("VNF_ID", "VNF_A")
 public_key = os.getenv("PUBLIC_KEY", "default-pkey")
 broker_address = os.getenv("BROKER_ADDRESS", "kafka:9094")
@@ -40,7 +37,7 @@ def wait_for_kafka(broker, retries=10, delay=2):
             time.sleep(delay)
     raise RuntimeError("Kafka not available after maximum retries.")
 
-# --- Generate random symmetric key ---
+# --- Generate symmetric key ---
 def get_random_key(n_bits):
     return hex(random.getrandbits(n_bits))[2:]
 
@@ -49,7 +46,7 @@ def get_macsec_key_id(index):
     return str(index // 10) + str(index % 10)
 
 # --- Configure MACsec manually ---
-def macsec_manual(vl_id, declarations, interface):
+def macsec_manual(vl_id, declarations, interface, prefixlen):
     macsec_if_name = f"macsec_{interface['name']}"
     logger.info(f"Configuring MACsec for {vl_id} on {interface['name']}")
 
@@ -71,25 +68,25 @@ def macsec_manual(vl_id, declarations, interface):
                 break
 
     ip = IPRoute()
-    macsec_if_number = ip.link_lookup(ifname=macsec_if_name)[0]
-    ip.link('set', index=macsec_if_number, state='up')
-
-    # Move IP address from original interface to MACsec interface
     try:
-        ip_addr = interface['IP_address']
-        ip.link('set', index=ip.link_lookup(ifname=interface['name'])[0], state='down')
-        ip.addr('del', index=ip.link_lookup(ifname=interface['name'])[0], address=ip_addr, mask=24)
-        ip.addr('add', index=macsec_if_number, address=ip_addr, mask=24)
-        logger.info(f"IP {ip_addr} moved from {interface['name']} to {macsec_if_name}")
+        link_index = ip.link_lookup(ifname=interface['name'])[0]
+        ip.addr('del', index=link_index, address=interface['IP_address'], mask=prefixlen)
+        logger.info(f"Removed IP {interface['IP_address']}/{prefixlen} from {interface['name']}")
+
+        macsec_index = ip.link_lookup(ifname=macsec_if_name)[0]
+        ip.addr('add', index=macsec_index, address=interface['IP_address'], mask=prefixlen)
+        logger.info(f"Assigned IP {interface['IP_address']}/{prefixlen} to {macsec_if_name}")
+
+        ip.link('set', index=macsec_index, state='up')
     except Exception as e:
         logger.error(f"Failed to migrate IP: {e}")
 
-# --- Select security mechanism ---
+# --- Choose security mechanism (fixed for now) ---
 def select_security_mechanism(declarations):
     return 'MACsec/manual'
 
-# --- Worker thread to configure security ---
-def security_agent_worker(vl, interface):
+# --- Worker thread to apply security settings ---
+def security_agent_worker(vl, interface, prefixlen):
     logger.info(f"Worker started for link {vl['vl_id']}")
     messages = KafkaConsumer(
         vl['vl_id'],
@@ -102,11 +99,10 @@ def security_agent_worker(vl, interface):
     declarations = [msg.value for msg in messages]
     logger.info(f"Declarations received: {len(declarations)}")
 
-    option = select_security_mechanism(declarations)
-    if option == 'MACsec/manual':
-        macsec_manual(vl['vl_id'], declarations, interface)
+    if select_security_mechanism(declarations) == 'MACsec/manual':
+        macsec_manual(vl['vl_id'], declarations, interface, prefixlen)
 
-# --- Main Logic ---
+# --- Main logic ---
 def main():
     wait_for_kafka(broker_address)
 
@@ -132,12 +128,14 @@ def main():
                     if_name = neighbour['interface']
                     link_index = ip.link_lookup(ifname=if_name)[0]
                     MAC_address = ip.get_links(link_index)[0].get_attr('IFLA_ADDRESS')
-                    IP_address = ip.get_addr(index=link_index, family=2)[0].get_attr('IFA_ADDRESS')
+                    addr_info = ip.get_addr(index=link_index, family=2)[0]
+                    IP_address = addr_info.get_attr('IFA_ADDRESS')
+                    prefixlen = addr_info['prefixlen']
 
                     interface = {
                         'name': if_name,
                         'MAC_address': MAC_address,
-                        'IP_address': IP_address,
+                        'IP_address': IP_address
                     }
 
                     key = get_random_key(128)
@@ -162,7 +160,7 @@ def main():
                     producer.flush()
                     logger.info(f"Declaration published in topic {vl['vl_id']}: {declaration}")
 
-                    worker = threading.Thread(target=security_agent_worker, name=vl['vl_id'], args=(vl, interface))
+                    worker = threading.Thread(target=security_agent_worker, name=vl['vl_id'], args=(vl, interface, prefixlen))
                     worker.start()
                     break
 
