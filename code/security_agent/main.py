@@ -9,10 +9,11 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from pyroute2 import IPRoute
 
-# --- Logging setup ---
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
+logging.getLogger("kafka").setLevel(logging.WARNING)
 
-# --- Environment variables ---
+# Read environment variables
 vnf_id = os.getenv("VNF_ID", "VNF_A")
 public_key = os.getenv("PUBLIC_KEY", "default-pkey")
 broker_address = os.getenv("BROKER_ADDRESS", "kafka:9094")
@@ -20,15 +21,11 @@ vnffg_topic = os.getenv("VNF_FG_TOPIC", "vnffg_topic")
 declaration_timeout = int(os.getenv("DECLARATION_TIMEOUT_MS", "1000"))
 preferred_mechanisms = os.getenv("PREFERRED_MECHANISMS", "MACsec/manual,IPsec/manual").split(",")
 
-# --- Wait until Kafka is available ---
+# --- Wait for Kafka availability ---
 def wait_for_kafka(broker, retries=10, delay=2):
     for attempt in range(retries):
         try:
-            consumer = KafkaConsumer(
-                bootstrap_servers=[broker],
-                request_timeout_ms=1000,
-                consumer_timeout_ms=1000
-            )
+            consumer = KafkaConsumer(bootstrap_servers=[broker], request_timeout_ms=1000, consumer_timeout_ms=1000)
             consumer.close()
             logging.info(f"Kafka is available (attempt {attempt + 1})")
             return
@@ -45,36 +42,31 @@ def get_random_key(n_bits):
 def get_macsec_key_id(index):
     return str(index // 10) + str(index % 10)
 
-# --- Generate IPsec SPI ---
-def get_spi(index):
-    return 10000 + index  # Simple offset to avoid low-value conflicts
+# --- Generate a security declaration based on preferences ---
+def generate_declaration(index, MAC_address, IP_address):
+    key = get_random_key(128)
+    key_id = get_macsec_key_id(index)
+    spi = str(1000 + index)
 
-# --- Generate security declaration for a VNF ---
-def generate_declaration(mac_addr, ip_addr, index):
     mechanisms = []
 
     if "MACsec/manual" in preferred_mechanisms:
-        key = get_random_key(128)
-        key_id = get_macsec_key_id(index)
         mechanisms.append({
             "mechanism": "MACsec/manual",
             "parameters": {
-                "MAC_address": mac_addr,
+                "MAC_address": MAC_address,
                 "key": key,
                 "key_id": key_id
             }
         })
 
     if "IPsec/manual" in preferred_mechanisms:
-        encryption_key = get_random_key(256)
-        authentication_key = get_random_key(256)
-        spi = get_spi(index)
         mechanisms.append({
             "mechanism": "IPsec/manual",
             "parameters": {
-                "IP_address": ip_addr,
-                "encryption_key": encryption_key,
-                "authentication_key": authentication_key,
+                "local_ip": IP_address,
+                "encryption_key": key,
+                "auth_key": get_random_key(128),
                 "spi": spi
             }
         })
@@ -82,22 +74,31 @@ def generate_declaration(mac_addr, ip_addr, index):
     return {
         "vnf_id": vnf_id,
         "security_mechanisms": mechanisms,
-        "digital_signature": ""  # Placeholder for future implementation
+        "digital_signature": ""
     }
 
-# --- Select common mechanism across declarations ---
-def select_security_mechanism(declarations):
-    declared_sets = [
-        set(mech["mechanism"] for mech in decl["security_mechanisms"])
-        for decl in declarations
-    ]
-    common_mechs = set.intersection(*declared_sets)
-    for pref in preferred_mechanisms:
-        if pref in common_mechs:
-            return pref
+# --- Select a common security mechanism ---
+def select_security_mechanism(declarations, preference_list):
+    logging.info("Evaluating common security mechanisms...")
+
+    mechanisms_per_vnf = []
+    for dec in declarations:
+        supported = {mech['mechanism'] for mech in dec['security_mechanisms']}
+        mechanisms_per_vnf.append(supported)
+        logging.info(f"VNF {dec['vnf_id']} supports: {supported}")
+
+    common = set.intersection(*mechanisms_per_vnf) if mechanisms_per_vnf else set()
+    logging.info(f"Common mechanisms across VNFs: {common}")
+
+    for preferred in preference_list:
+        if preferred in common:
+            logging.info(f"Selected mechanism: {preferred}")
+            return preferred
+
+    logging.warning("No common security mechanism found.")
     return None
 
-# --- Configure MACsec manually ---
+# --- Configure MACsec ---
 def macsec_manual(vl_id, declarations, interface):
     macsec_if_name = f"macsec_{interface['name']}"
     logging.info(f"Configuring MACsec for {vl_id} on {interface['name']}")
@@ -110,15 +111,14 @@ def macsec_manual(vl_id, declarations, interface):
 
     for declaration in declarations:
         for mech in declaration['security_mechanisms']:
-            if mech['mechanism'] != 'MACsec/manual':
-                continue
-
-            params = mech['parameters']
-            if declaration['vnf_id'] == vnf_id:
-                subprocess.run(['ip', 'macsec', 'add', macsec_if_name, 'tx', 'sa', '0', 'pn', '100', 'on', 'key', params['key_id'], params['key']], check=True)
-            else:
-                subprocess.run(['ip', 'macsec', 'add', macsec_if_name, 'rx', 'address', params['MAC_address'], 'port', '1'], check=True)
-                subprocess.run(['ip', 'macsec', 'add', macsec_if_name, 'rx', 'address', params['MAC_address'], 'port', '1', 'sa', '0', 'pn', '100', 'on', 'key', params['key_id'], params['key']], check=True)
+            if mech['mechanism'] == 'MACsec/manual':
+                params = mech['parameters']
+                if declaration['vnf_id'] == vnf_id:
+                    subprocess.run(['ip', 'macsec', 'add', macsec_if_name, 'tx', 'sa', '0', 'pn', '100', 'on', 'key', params['key_id'], params['key']], check=True)
+                else:
+                    subprocess.run(['ip', 'macsec', 'add', macsec_if_name, 'rx', 'address', params['MAC_address'], 'port', '1'], check=True)
+                    subprocess.run(['ip', 'macsec', 'add', macsec_if_name, 'rx', 'address', params['MAC_address'], 'port', '1', 'sa', '0', 'pn', '100', 'on', 'key', params['key_id'], params['key']], check=True)
+                break
 
     ip = IPRoute()
     macsec_if_number = ip.link_lookup(ifname=macsec_if_name)[0]
@@ -134,17 +134,15 @@ def security_agent_worker(vl, interface):
         consumer_timeout_ms=declaration_timeout,
         value_deserializer=lambda x: loads(x.decode('utf-8'))
     )
-
     declarations = [msg.value for msg in messages]
     logging.info(f"Declarations received: {len(declarations)}")
 
-    selected = select_security_mechanism(declarations)
-    if selected == "MACsec/manual":
+    selected = select_security_mechanism(declarations, preferred_mechanisms)
+
+    if selected == 'MACsec/manual':
         macsec_manual(vl['vl_id'], declarations, interface)
-    elif selected == "IPsec/manual":
-        logging.info("IPsec/manual selected (implementation pending)")
     else:
-        logging.warning("No compatible security mechanism found.")
+        logging.warning(f"No configuration function implemented for {selected}")
 
 # --- Main logic ---
 def main():
@@ -180,7 +178,7 @@ def main():
                         'IP_address': IP_address,
                     }
 
-                    declaration = generate_declaration(MAC_address, IP_address, index)
+                    declaration = generate_declaration(index, MAC_address, IP_address)
                     producer.send(vl['vl_id'], value=declaration)
                     producer.flush()
                     logging.info(f"Declaration published in topic {vl['vl_id']}: {declaration}")
