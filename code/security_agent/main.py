@@ -13,10 +13,10 @@ from pyroute2 import IPRoute
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- Reduce Kafka logging verbosity ---
-logging.getLogger("kafka").setLevel(logging.WARNING)
-logging.getLogger("kafka.conn").setLevel(logging.WARNING)
-logging.getLogger("kafka.client").setLevel(logging.WARNING)
+# --- Deactivate Kafka logging verbosity ---
+logging.getLogger("kafka").setLevel(logging.CRITICAL + 1)
+logging.getLogger("kafka.conn").setLevel(logging.CRITICAL + 1)
+logging.getLogger("kafka.client").setLevel(logging.CRITICAL + 1)
 
 # --- Read environment variables ---
 vnf_id = os.getenv("VNF_ID", "VNF_A")
@@ -96,33 +96,52 @@ def ipsec_manual(vl_id, declarations, interface):
     logger.info(f"[TODO] Configure IPsec/manual for {vl_id} on {interface['name']}")
     # This is a placeholder for actual implementation
 
-# --- Select security mechanism based on consensus ---
-def select_security_mechanism(declarations, preferences):
+def select_security_mechanism(declarations, preferred_mechanisms):
     """
-    Selects the best common mechanism among all declarations, based on local preference order.
-    Logs each step of the consensus process.
-    """
-    logger.info(f"Selecting security mechanism based on preferences: {preferences}")
-    
-    sets_of_mechs = []
-    for decl in declarations:
-        mechs = {mech['mechanism'] for mech in decl['security_mechanisms']}
-        logger.info(f"VNF {decl['vnf_id']} supports mechanisms: {mechs}")
-        sets_of_mechs.append(mechs)
+    Select a security mechanism supported by all VNFs in the virtual link.
 
-    if not sets_of_mechs:
-        logger.warning("No mechanisms declared by any VNF.")
+    If only one mechanism is common, it is selected directly.
+    If multiple are available, the selection follows the preference list
+    of the VNF with the lexicographically smallest ID (to ensure deterministic behavior).
+    """
+    logger.info(f"Selecting security mechanism based on preferences: {preferred_mechanisms}")
+
+    # Collect supported mechanisms for each VNF
+    supported_mechs_by_vnf = {}
+    preferences_by_vnf = {}
+
+    for declaration in declarations:
+        vnf = declaration["vnf_id"]
+        mechs = {mech["mechanism"] for mech in declaration["security_mechanisms"]}
+        supported_mechs_by_vnf[vnf] = mechs
+        preferences_by_vnf[vnf] = [mech["mechanism"] for mech in declaration["security_mechanisms"]]
+
+        logger.info(f"VNF {vnf} supports mechanisms: {mechs}")
+
+    # Determine common mechanisms among all VNFs
+    common_mechs = set.intersection(*supported_mechs_by_vnf.values())
+    logger.info(f"Common mechanisms supported by all VNFs: {common_mechs}")
+
+    if not common_mechs:
+        logger.error("No common security mechanism could be agreed upon.")
         return None
 
-    common_mechanisms = set.intersection(*sets_of_mechs)
-    logger.info(f"Common mechanisms supported by all VNFs: {common_mechanisms}")
+    if len(common_mechs) == 1:
+        selected = next(iter(common_mechs))
+        logger.info(f"Only one common mechanism found: {selected}")
+        return selected
 
-    for preferred in preferences:
-        if preferred in common_mechanisms:
-            logger.info(f"Selected mechanism: {preferred}")
-            return preferred
+    # Deterministically select the VNF with the lowest ID
+    selected_vnf = sorted(preferences_by_vnf.keys())[0]
+    logger.info(f"Using preference list of VNF with lowest ID: {selected_vnf}")
 
-    logger.warning("No common mechanism found among preferences and declarations.")
+    # Pick the first mechanism from its list that is in the common set
+    for mech in preferences_by_vnf[selected_vnf]:
+        if mech in common_mechs:
+            logger.info(f"Selected mechanism: {mech}")
+            return mech
+
+    logger.warning("Could not match any mechanism from the lowest-ID VNF's preference list.")
     return None
 
 # --- Build declaration based on preferred mechanisms ---
