@@ -100,24 +100,31 @@ def ipsec_manual(vl_id, declarations, interface):
 def select_security_mechanism(declarations, preferences):
     """
     Selects the best common mechanism among all declarations, based on local preference order.
+    Logs each step of the consensus process.
     """
-    # Step 1: Extract list of mechanisms supported by each VNF
+    logger.info(f"Selecting security mechanism based on preferences: {preferences}")
+    
     sets_of_mechs = []
     for decl in declarations:
-        mechanisms = {mech['mechanism'] for mech in decl['security_mechanisms']}
-        sets_of_mechs.append(mechanisms)
+        mechs = {mech['mechanism'] for mech in decl['security_mechanisms']}
+        logger.info(f"VNF {decl['vnf_id']} supports mechanisms: {mechs}")
+        sets_of_mechs.append(mechs)
 
-    # Step 2: Compute the intersection of supported mechanisms
     if not sets_of_mechs:
+        logger.warning("No mechanisms declared by any VNF.")
         return None
-    common_mechanisms = set.intersection(*sets_of_mechs)
 
-    # Step 3: Find the most preferred option from the local preference list
+    common_mechanisms = set.intersection(*sets_of_mechs)
+    logger.info(f"Common mechanisms supported by all VNFs: {common_mechanisms}")
+
     for preferred in preferences:
         if preferred in common_mechanisms:
+            logger.info(f"Selected mechanism: {preferred}")
             return preferred
 
-    return None  # No common mechanism found
+    logger.warning("No common mechanism found among preferences and declarations.")
+    return None
+
 
 # --- Worker thread to apply security settings ---
 def security_agent_worker(vl, interface, prefixlen):
