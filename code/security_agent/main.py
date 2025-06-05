@@ -140,7 +140,7 @@ def security_agent_worker(vl, interface, prefixlen):
     declarations = [msg.value for msg in messages]
     logger.info(f"Declarations received: {len(declarations)}")
 
-    selected = select_security_mechanism(declarations)
+    selected = select_security_mechanism(declarations, preferred_mechanisms)
     logger.info(f"Selected security mechanism for {vl['vl_id']}: {selected}")
 
     if selected == 'MACsec/manual':

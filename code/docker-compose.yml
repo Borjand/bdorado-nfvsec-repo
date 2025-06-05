@@ -21,9 +21,9 @@ services:
     depends_on:
       - kafka
     ports:
-      - "8000:8000"  
+      - "8000:8000"
     environment:
-      - BROKER_ADDRESS=kafka:9094  
+      - BROKER_ADDRESS=kafka:9094
 
   agent_vnf_a:
     build: ./security_agent
@@ -34,6 +34,7 @@ services:
       PUBLIC_KEY: vnfa-PKEY
       VNF_FG_TOPIC: vnffg_topic
       DECLARATION_TIMEOUT_MS: 1000
+      PREFERRED_MECHANISMS: MACsec/manual,IPsec/manual
     cap_add:
       - NET_ADMIN
     depends_on:
@@ -48,6 +49,22 @@ services:
       PUBLIC_KEY: vfnb-PKEY
       VNF_FG_TOPIC: vnffg_topic
       DECLARATION_TIMEOUT_MS: 1000
+      PREFERRED_MECHANISMS: IPsec/manual
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - kafka
+
+  agent_vnf_c:
+    build: ./security_agent
+    container_name: agent_vnf_c
+    environment:
+      VNF_ID: VNF_C
+      BROKER_ADDRESS: kafka:9094
+      PUBLIC_KEY: vfnb-PKEY
+      VNF_FG_TOPIC: vnffg_topic
+      DECLARATION_TIMEOUT_MS: 1000
+      PREFERRED_MECHANISMS: IPsec/manual
     cap_add:
       - NET_ADMIN
     depends_on:
