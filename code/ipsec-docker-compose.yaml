@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  kafka:
+    image: apache/kafka-native:4.0.0
+    ports:
+      - "9092:9092"  # ↩ acceso desde tu PC
+    networks:
+      vl_network:
+        ipv4_address: 172.19.0.2
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:9094"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT_INTERNAL"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"
+      KAFKA_CLUSTER_ID: "abcdefghij"
+
+  security_manager:
+    build: ./security_manager
+    depends_on:
+      - kafka
+    ports:
+      - "8000:8000"
+    environment:
+      - BROKER_ADDRESS=kafka:9094
+    networks:
+      vl_network:
+        ipv4_address: 172.19.0.3
+
+  agent_vnf_a:
+    build: ./security_agent
+    container_name: agent_vnf_a
+    networks:
+      vl_network:
+        ipv4_address: 172.19.0.5
+      lan_a:
+        ipv4_address: 10.0.0.2
+    environment:
+      VNF_ID: VNF_A
+      BROKER_ADDRESS: kafka:9094
+      PUBLIC_KEY: vnfa-PKEY
+      VNF_FG_TOPIC: vnffg_topic
+      DECLARATION_TIMEOUT_MS: 1000
+      PREFERRED_MECHANISMS: MACsec/manual,IPsec/manual
+      PROTECTED_SUBNET: 10.0.0.0/24
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - kafka
+
+  agent_vnf_b:
+    build: ./security_agent
+    container_name: agent_vnf_b
+    networks:
+      vl_network:
+        ipv4_address: 172.19.0.4
+      lan_b:
+        ipv4_address: 10.0.1.2
+    environment:
+      VNF_ID: VNF_B
+      BROKER_ADDRESS: kafka:9094
+      PUBLIC_KEY: vfnb-PKEY
+      VNF_FG_TOPIC: vnffg_topic
+      DECLARATION_TIMEOUT_MS: 1000
+      PREFERRED_MECHANISMS: IPsec/manual
+      PROTECTED_SUBNET: 10.0.1.0/24
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - kafka
+
+
+networks:
+  vl_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+
+  lan_a:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+
+  lan_b:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
