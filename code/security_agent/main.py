@@ -96,16 +96,28 @@ def ipsec_manual(vl_id, declarations, interface):
     logger.info(f"[TODO] Configure IPsec/manual for {vl_id} on {interface['name']}")
     # This is a placeholder for actual implementation
 
-# --- Select common security mechanism ---
-def select_security_mechanism(declarations):
-    offered_sets = []
-    for d in declarations:
-        offered_sets.append(set(m['mechanism'] for m in d['security_mechanisms']))
-    common = set.intersection(*offered_sets)
-    for mechanism in preferred_mechanisms:
-        if mechanism in common:
-            return mechanism
-    return None
+# --- Select security mechanism based on consensus ---
+def select_security_mechanism(declarations, preferences):
+    """
+    Selects the best common mechanism among all declarations, based on local preference order.
+    """
+    # Step 1: Extract list of mechanisms supported by each VNF
+    sets_of_mechs = []
+    for decl in declarations:
+        mechanisms = {mech['mechanism'] for mech in decl['security_mechanisms']}
+        sets_of_mechs.append(mechanisms)
+
+    # Step 2: Compute the intersection of supported mechanisms
+    if not sets_of_mechs:
+        return None
+    common_mechanisms = set.intersection(*sets_of_mechs)
+
+    # Step 3: Find the most preferred option from the local preference list
+    for preferred in preferences:
+        if preferred in common_mechanisms:
+            return preferred
+
+    return None  # No common mechanism found
 
 # --- Worker thread to apply security settings ---
 def security_agent_worker(vl, interface, prefixlen):
