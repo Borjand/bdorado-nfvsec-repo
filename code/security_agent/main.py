@@ -9,32 +9,41 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from pyroute2 import IPRoute
 
-# Configure logging
+# --- Logging setup ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
-logging.getLogger("kafka").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
-# Read environment variables
+# --- Reduce Kafka logging verbosity ---
+logging.getLogger("kafka").setLevel(logging.WARNING)
+logging.getLogger("kafka.conn").setLevel(logging.WARNING)
+logging.getLogger("kafka.client").setLevel(logging.WARNING)
+
+# --- Read environment variables ---
 vnf_id = os.getenv("VNF_ID", "VNF_A")
 public_key = os.getenv("PUBLIC_KEY", "default-pkey")
 broker_address = os.getenv("BROKER_ADDRESS", "kafka:9094")
 vnffg_topic = os.getenv("VNF_FG_TOPIC", "vnffg_topic")
 declaration_timeout = int(os.getenv("DECLARATION_TIMEOUT_MS", "1000"))
-preferred_mechanisms = os.getenv("PREFERRED_MECHANISMS", "MACsec/manual,IPsec/manual").split(",")
+preferred_mechanisms = os.getenv("PREFERRED_MECHANISMS", "MACsec/manual,IPsec/manual").split(',')
 
-# --- Wait for Kafka availability ---
+# --- Wait for Kafka to become available ---
 def wait_for_kafka(broker, retries=10, delay=2):
     for attempt in range(retries):
         try:
-            consumer = KafkaConsumer(bootstrap_servers=[broker], request_timeout_ms=1000, consumer_timeout_ms=1000)
+            consumer = KafkaConsumer(
+                bootstrap_servers=[broker],
+                request_timeout_ms=1000,
+                consumer_timeout_ms=1000
+            )
             consumer.close()
-            logging.info(f"Kafka is available (attempt {attempt + 1})")
+            logger.info(f"Kafka is available (attempt {attempt + 1})")
             return
         except NoBrokersAvailable:
-            logging.warning(f"Kafka not available, retrying in {delay}s (attempt {attempt + 1}/{retries})")
+            logger.warning(f"Kafka not available, retrying in {delay}s (attempt {attempt + 1}/{retries})")
             time.sleep(delay)
     raise RuntimeError("Kafka not available after maximum retries.")
 
-# --- Generate a random symmetric key ---
+# --- Generate symmetric key ---
 def get_random_key(n_bits):
     return hex(random.getrandbits(n_bits))[2:]
 
@@ -42,71 +51,19 @@ def get_random_key(n_bits):
 def get_macsec_key_id(index):
     return str(index // 10) + str(index % 10)
 
-# --- Generate a security declaration based on preferences ---
-def generate_declaration(index, MAC_address, IP_address):
-    key = get_random_key(128)
-    key_id = get_macsec_key_id(index)
-    spi = str(1000 + index)
+# --- Generate IPsec SPI (Security Parameter Index) ---
+def generate_spi(vnf_id):
+    return hex(abs(hash(vnf_id)) % (2**32))
 
-    mechanisms = []
-
-    if "MACsec/manual" in preferred_mechanisms:
-        mechanisms.append({
-            "mechanism": "MACsec/manual",
-            "parameters": {
-                "MAC_address": MAC_address,
-                "key": key,
-                "key_id": key_id
-            }
-        })
-
-    if "IPsec/manual" in preferred_mechanisms:
-        mechanisms.append({
-            "mechanism": "IPsec/manual",
-            "parameters": {
-                "local_ip": IP_address,
-                "encryption_key": key,
-                "auth_key": get_random_key(128),
-                "spi": spi
-            }
-        })
-
-    return {
-        "vnf_id": vnf_id,
-        "security_mechanisms": mechanisms,
-        "digital_signature": ""
-    }
-
-# --- Select a common security mechanism ---
-def select_security_mechanism(declarations, preference_list):
-    logging.info("Evaluating common security mechanisms...")
-
-    mechanisms_per_vnf = []
-    for dec in declarations:
-        supported = {mech['mechanism'] for mech in dec['security_mechanisms']}
-        mechanisms_per_vnf.append(supported)
-        logging.info(f"VNF {dec['vnf_id']} supports: {supported}")
-
-    common = set.intersection(*mechanisms_per_vnf) if mechanisms_per_vnf else set()
-    logging.info(f"Common mechanisms across VNFs: {common}")
-
-    for preferred in preference_list:
-        if preferred in common:
-            logging.info(f"Selected mechanism: {preferred}")
-            return preferred
-
-    logging.warning("No common security mechanism found.")
-    return None
-
-# --- Configure MACsec ---
-def macsec_manual(vl_id, declarations, interface):
+# --- Configure MACsec manually ---
+def macsec_manual(vl_id, declarations, interface, prefixlen):
     macsec_if_name = f"macsec_{interface['name']}"
-    logging.info(f"Configuring MACsec for {vl_id} on {interface['name']}")
+    logger.info(f"Configuring MACsec for {vl_id} on {interface['name']}")
 
     try:
         subprocess.run(['ip', 'link', 'add', 'link', interface['name'], macsec_if_name, 'type', 'macsec'], check=True)
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to create MACsec interface: {e}")
+        logger.error(f"Failed to create MACsec interface: {e}")
         return
 
     for declaration in declarations:
@@ -121,12 +78,38 @@ def macsec_manual(vl_id, declarations, interface):
                 break
 
     ip = IPRoute()
-    macsec_if_number = ip.link_lookup(ifname=macsec_if_name)[0]
-    ip.link('set', index=macsec_if_number, state='up')
+    try:
+        link_index = ip.link_lookup(ifname=interface['name'])[0]
+        ip.addr('del', index=link_index, address=interface['IP_address'], mask=prefixlen)
+        logger.info(f"Removed IP {interface['IP_address']}/{prefixlen} from {interface['name']}")
 
-# --- Thread worker per virtual link ---
-def security_agent_worker(vl, interface):
-    logging.info(f"Worker started for link {vl['vl_id']}")
+        macsec_index = ip.link_lookup(ifname=macsec_if_name)[0]
+        ip.addr('add', index=macsec_index, address=interface['IP_address'], mask=prefixlen)
+        logger.info(f"Assigned IP {interface['IP_address']}/{prefixlen} to {macsec_if_name}")
+
+        ip.link('set', index=macsec_index, state='up')
+    except Exception as e:
+        logger.error(f"Failed to migrate IP: {e}")
+
+# --- Placeholder: Configure IPsec manually ---
+def ipsec_manual(vl_id, declarations, interface):
+    logger.info(f"[TODO] Configure IPsec/manual for {vl_id} on {interface['name']}")
+    # This is a placeholder for actual implementation
+
+# --- Select common security mechanism ---
+def select_security_mechanism(declarations):
+    offered_sets = []
+    for d in declarations:
+        offered_sets.append(set(m['mechanism'] for m in d['security_mechanisms']))
+    common = set.intersection(*offered_sets)
+    for mechanism in preferred_mechanisms:
+        if mechanism in common:
+            return mechanism
+    return None
+
+# --- Worker thread to apply security settings ---
+def security_agent_worker(vl, interface, prefixlen):
+    logger.info(f"Worker started for link {vl['vl_id']}")
     messages = KafkaConsumer(
         vl['vl_id'],
         bootstrap_servers=[broker_address],
@@ -134,15 +117,17 @@ def security_agent_worker(vl, interface):
         consumer_timeout_ms=declaration_timeout,
         value_deserializer=lambda x: loads(x.decode('utf-8'))
     )
-    declarations = [msg.value for msg in messages]
-    logging.info(f"Declarations received: {len(declarations)}")
 
-    selected = select_security_mechanism(declarations, preferred_mechanisms)
+    declarations = [msg.value for msg in messages]
+    logger.info(f"Declarations received: {len(declarations)}")
+
+    selected = select_security_mechanism(declarations)
+    logger.info(f"Selected security mechanism for {vl['vl_id']}: {selected}")
 
     if selected == 'MACsec/manual':
-        macsec_manual(vl['vl_id'], declarations, interface)
-    else:
-        logging.warning(f"No configuration function implemented for {selected}")
+        macsec_manual(vl['vl_id'], declarations, interface, prefixlen)
+    elif selected == 'IPsec/manual':
+        ipsec_manual(vl['vl_id'], declarations, interface)
 
 # --- Main logic ---
 def main():
@@ -164,26 +149,55 @@ def main():
         for vl in vnf_fg:
             for index, neighbour in enumerate(vl['neighbours']):
                 if neighbour['vnf_id'] == vnf_id:
-                    logging.info(f"Found matching link for {vnf_id}: {neighbour}")
+                    logger.info(f"Found matching link for {vnf_id}: {neighbour}")
 
                     ip = IPRoute()
                     if_name = neighbour['interface']
                     link_index = ip.link_lookup(ifname=if_name)[0]
                     MAC_address = ip.get_links(link_index)[0].get_attr('IFLA_ADDRESS')
-                    IP_address = ip.get_addr(index=link_index, family=2)[0].get_attr('IFA_ADDRESS')
+                    addr_info = ip.get_addr(index=link_index, family=2)[0]
+                    IP_address = addr_info.get_attr('IFA_ADDRESS')
+                    prefixlen = addr_info['prefixlen']
 
                     interface = {
                         'name': if_name,
                         'MAC_address': MAC_address,
-                        'IP_address': IP_address,
+                        'IP_address': IP_address
                     }
 
-                    declaration = generate_declaration(index, MAC_address, IP_address)
+                    key = get_random_key(128)
+                    key_id = get_macsec_key_id(index)
+                    spi = generate_spi(vnf_id)
+
+                    declaration = {
+                        'vnf_id': vnf_id,
+                        'security_mechanisms': [
+                            {
+                                'mechanism': 'MACsec/manual',
+                                'parameters': {
+                                    'MAC_address': MAC_address,
+                                    'key': key,
+                                    'key_id': key_id
+                                }
+                            },
+                            {
+                                'mechanism': 'IPsec/manual',
+                                'parameters': {
+                                    'IP_address': IP_address,
+                                    'spi': spi,
+                                    'encryption_key': get_random_key(256),
+                                    'auth_key': get_random_key(256)
+                                }
+                            }
+                        ],
+                        'digital_signature': ''
+                    }
+
                     producer.send(vl['vl_id'], value=declaration)
                     producer.flush()
-                    logging.info(f"Declaration published in topic {vl['vl_id']}: {declaration}")
+                    logger.info(f"Declaration published in topic {vl['vl_id']}: {declaration}")
 
-                    worker = threading.Thread(target=security_agent_worker, name=vl['vl_id'], args=(vl, interface))
+                    worker = threading.Thread(target=security_agent_worker, name=vl['vl_id'], args=(vl, interface, prefixlen))
                     worker.start()
                     break
 
