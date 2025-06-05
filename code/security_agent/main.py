@@ -25,6 +25,8 @@ broker_address = os.getenv("BROKER_ADDRESS", "kafka:9094")
 vnffg_topic = os.getenv("VNF_FG_TOPIC", "vnffg_topic")
 declaration_timeout = int(os.getenv("DECLARATION_TIMEOUT_MS", "1000"))
 preferred_mechanisms = os.getenv("PREFERRED_MECHANISMS", "MACsec/manual,IPsec/manual").split(',')
+protected_subnet = os.getenv("PROTECTED_SUBNET")  # Optional, only for IPsec
+
 
 # --- Wait for Kafka to become available ---
 def wait_for_kafka(broker, retries=10, delay=2):
@@ -91,10 +93,81 @@ def macsec_manual(vl_id, declarations, interface, prefixlen):
     except Exception as e:
         logger.error(f"Failed to migrate IP: {e}")
 
-# --- Placeholder: Configure IPsec manually ---
+# --- Configure IPsec manually ---
 def ipsec_manual(vl_id, declarations, interface):
-    logger.info(f"[TODO] Configure IPsec/manual for {vl_id} on {interface['name']}")
-    # This is a placeholder for actual implementation
+    logger.info(f"Configuring IPsec/manual for {vl_id} on {interface['name']}")
+    
+    my_decl = next((d for d in declarations if d['vnf_id'] == vnf_id), None)
+    if not my_decl:
+        logger.error("No local declaration found for IPsec/manual")
+        return
+
+    my_params = next((m['parameters'] for m in my_decl['security_mechanisms']
+                      if m['mechanism'] == 'IPsec/manual'), None)
+
+    if not my_params:
+        logger.error("No IPsec/manual parameters found in local declaration")
+        return
+
+    my_ip = my_params['IP_address']
+    my_spi = my_params['spi']
+    my_auth_key = my_params['auth_key']
+    my_encryption_key = my_params['encryption_key']
+    my_subnet = my_params.get('protected_subnet', f"{my_ip}/32")
+
+    for peer_decl in declarations:
+        if peer_decl['vnf_id'] == vnf_id:
+            continue  # Skip self
+
+        peer_params = next((m['parameters'] for m in peer_decl['security_mechanisms']
+                            if m['mechanism'] == 'IPsec/manual'), None)
+        if not peer_params:
+            continue
+
+        peer_ip = peer_params['IP_address']
+        peer_spi = peer_params['spi']
+        peer_auth_key = peer_params['auth_key']
+        peer_encryption_key = peer_params['encryption_key']
+        peer_subnet = peer_params.get('protected_subnet', f"{peer_ip}/32")
+
+        try:
+            # State: outgoing
+            subprocess.run([
+                'ip', 'xfrm', 'state', 'add', 'src', my_ip, 'dst', peer_ip,
+                'proto', 'esp', 'spi', my_spi,
+                'auth', 'sha256', my_auth_key,
+                'enc', 'aes', my_encryption_key,
+                'mode', 'tunnel'
+            ], check=True)
+
+            # State: incoming
+            subprocess.run([
+                'ip', 'xfrm', 'state', 'add', 'src', peer_ip, 'dst', my_ip,
+                'proto', 'esp', 'spi', peer_spi,
+                'auth', 'sha256', peer_auth_key,
+                'enc', 'aes', peer_encryption_key,
+                'mode', 'tunnel'
+            ], check=True)
+
+            # Policy: outgoing
+            subprocess.run([
+                'ip', 'xfrm', 'policy', 'add', 'src', my_subnet, 'dst', peer_subnet,
+                'dir', 'out', 'tmpl', 'src', my_ip, 'dst', peer_ip,
+                'proto', 'esp', 'mode', 'tunnel'
+            ], check=True)
+
+            # Policy: incoming
+            subprocess.run([
+                'ip', 'xfrm', 'policy', 'add', 'src', peer_subnet, 'dst', my_subnet,
+                'dir', 'in', 'tmpl', 'src', peer_ip, 'dst', my_ip,
+                'proto', 'esp', 'mode', 'tunnel'
+            ], check=True)
+
+            logger.info(f"[{peer_decl['vnf_id']}] IPsec/manual configured with peer {peer_ip}")
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to configure IPsec with {peer_ip}: {e}")
+
 
 def select_security_mechanism(declarations, preferred_mechanisms):
     """
@@ -159,14 +232,19 @@ def build_declaration(preferences, interface, index):
                 }
             })
         elif mech == 'IPsec/manual':
+            
+            ipsec_params = {
+                'IP_address': interface['IP_address'],
+                'spi': hex(random.getrandbits(32)),
+                'encryption_key': get_random_key(256),
+                'auth_key': get_random_key(256)
+            }
+            if protected_subnet:
+                ipsec_params['protected_subnet'] = protected_subnet
+
             mechanisms.append({
                 'mechanism': 'IPsec/manual',
-                'parameters': {
-                    'IP_address': interface['IP_address'],
-                    'spi': hex(random.getrandbits(32)),
-                    'encryption_key': get_random_key(256),
-                    'auth_key': get_random_key(256)
-                }
+                'parameters': ipsec_params
             })
 
     return {
@@ -197,6 +275,8 @@ def security_agent_worker(vl, interface, prefixlen):
         macsec_manual(vl['vl_id'], declarations, interface, prefixlen)
     elif selected == 'IPsec/manual':
         ipsec_manual(vl['vl_id'], declarations, interface)
+    else:
+        logger.warning(f"[{vl['vl_id']}] No implementation for selected mechanism: {selected}")
 
 # --- Main logic ---
 def main():
