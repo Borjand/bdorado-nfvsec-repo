@@ -53,6 +53,11 @@ def get_random_key(n_bits):
 def get_macsec_key_id(index):
     return str(index // 10) + str(index % 10)
 
+# --- Generate random symmetric keys for ipsec ---
+def generate_ipsec_key():
+    """Generate 256-bit (32-byte) key for IPsec (ESP and HMAC)."""
+    return os.urandom(32).hex()
+
 # --- Generate IPsec SPI (Security Parameter Index) ---
 def generate_spi(vnf_id):
     return hex(abs(hash(vnf_id)) % (2**32))
@@ -236,8 +241,8 @@ def build_declaration(preferences, interface, index):
             ipsec_params = {
                 'IP_address': interface['IP_address'],
                 'spi': hex(random.getrandbits(32)),
-                'encryption_key': get_random_key(256),
-                'auth_key': get_random_key(256)
+                'encryption_key': generate_ipsec_key(),
+                'auth_key': generate_ipsec_key()
             }
             if protected_subnet:
                 ipsec_params['protected_subnet'] = protected_subnet
