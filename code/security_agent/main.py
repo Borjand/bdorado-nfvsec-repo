@@ -125,6 +125,37 @@ def select_security_mechanism(declarations, preferences):
     logger.warning("No common mechanism found among preferences and declarations.")
     return None
 
+# --- Build declaration based on preferred mechanisms ---
+def build_declaration(preferences, interface, index):
+    mechanisms = []
+
+    for mech in preferences:
+        if mech == 'MACsec/manual':
+            mechanisms.append({
+                'mechanism': 'MACsec/manual',
+                'parameters': {
+                    'MAC_address': interface['MAC_address'],
+                    'key': get_random_key(128),
+                    'key_id': get_macsec_key_id(index)
+                }
+            })
+        elif mech == 'IPsec/manual':
+            mechanisms.append({
+                'mechanism': 'IPsec/manual',
+                'parameters': {
+                    'IP_address': interface['IP_address'],
+                    'spi': hex(random.getrandbits(32)),
+                    'encryption_key': get_random_key(256),
+                    'auth_key': get_random_key(256)
+                }
+            })
+
+    return {
+        'vnf_id': vnf_id,
+        'security_mechanisms': mechanisms,
+        'digital_signature': ''
+    }
+
 
 # --- Worker thread to apply security settings ---
 def security_agent_worker(vl, interface, prefixlen):
@@ -188,29 +219,7 @@ def main():
                     key_id = get_macsec_key_id(index)
                     spi = generate_spi(vnf_id)
 
-                    declaration = {
-                        'vnf_id': vnf_id,
-                        'security_mechanisms': [
-                            {
-                                'mechanism': 'MACsec/manual',
-                                'parameters': {
-                                    'MAC_address': MAC_address,
-                                    'key': key,
-                                    'key_id': key_id
-                                }
-                            },
-                            {
-                                'mechanism': 'IPsec/manual',
-                                'parameters': {
-                                    'IP_address': IP_address,
-                                    'spi': spi,
-                                    'encryption_key': get_random_key(256),
-                                    'auth_key': get_random_key(256)
-                                }
-                            }
-                        ],
-                        'digital_signature': ''
-                    }
+                    declaration = build_declaration(preferred_mechanisms, interface, index)
 
                     producer.send(vl['vl_id'], value=declaration)
                     producer.flush()
