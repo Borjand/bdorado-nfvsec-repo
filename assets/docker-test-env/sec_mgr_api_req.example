@@ -1,0 +1,47 @@
+curl -X POST http://172.18.255.200:8000/topology   -H "Content-Type: application/json"   -d '[
+    {
+      "vl_id": "ns_001.vl_001",
+      "neighbours": [
+        {
+          "vnf_id": "VNF_ROUTER",
+          "interface": "net1",
+          "publickey": "vnfr-PKEY"
+        },
+        {
+          "vnf_id": "VNF_LOADBALANCER",
+          "interface": "net1",
+          "publickey": "vnflb-PKEY"
+        },
+        {
+          "vnf_id": "VNF_WSERVER_0",
+          "interface": "net1",
+          "publickey": "vnfws-0-PKEY"
+        },
+        {
+          "vnf_id": "VNF_WSERVER_1",
+          "interface": "net1",
+          "publickey": "vnfws-1-PKEY"
+        },
+        {
+          "vnf_id": "VNF_WSERVER_2",
+          "interface": "net1",
+          "publickey": "vnfws-2-PKEY"
+        }
+      ]
+    },
+    {
+      "vl_id": "ns_001.vl_002",
+      "neighbours": [
+        {
+          "vnf_id": "VNF_ROUTER",
+          "interface": "net2",
+          "publickey": "vnfr-PKEY"
+        },
+        {
+          "vnf_id": "VNF_ACCESS_ROUTER",
+          "interface": "net2",
+          "publickey": "vnfar-PKEY"
+        }
+      ]
+    }
+  ]'

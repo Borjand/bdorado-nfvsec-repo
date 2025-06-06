@@ -25,10 +25,25 @@ network:
 servers:
   - name: web-server-0
     ip: 10.78.0.101
+    vnfId: VNF_WSERVER_0
+    publicKey: vnfws-0-PKEY
   - name: web-server-1
     ip: 10.78.0.102
+    vnfId: VNF_WSERVER_1
+    publicKey: vnfws-1-PKEY
   - name: web-server-2
     ip: 10.78.0.103
+    vnfId: VNF_WSERVER_2
+    publicKey: vnfws-2-PKEY
 
 nodeSelector:
   kubernetes.io/hostname: nfv-sec-cluster-worker
+
+
+
+secAgent:
+  image: bdorado/nfvsec-agent:latest 
+  brokerAddress: kafka:9094
+  fgTopic: vnffg_topic
+  timeout: 1000
+  mechanisms: MACsec/manual,IPsec/manual

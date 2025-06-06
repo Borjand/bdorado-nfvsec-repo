@@ -22,3 +22,12 @@ backendServers:
 
 nodeSelector:
   kubernetes.io/hostname: nfv-sec-cluster-worker
+
+secAgent:
+  image: bdorado/nfvsec-agent:latest 
+  vnfId: VNF_LOADBALANCER
+  brokerAddress: kafka:9094
+  publicKey: vnflb-PKEY
+  fgTopic: vnffg_topic
+  timeout: 1000
+  mechanisms: MACsec/manual

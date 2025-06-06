@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+spec:
+  type: {{ .Values.service.kafka.type }}
+  ports:
+    - port: 9094
+      targetPort: 9094
+  selector:
+    app: kafka

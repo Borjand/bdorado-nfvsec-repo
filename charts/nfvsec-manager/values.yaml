@@ -1,0 +1,16 @@
+kafka:
+  image: apache/kafka-native:4.0.0
+  port: 9094
+  clusterIP: None  # headless by default for testing
+
+manager:
+  image: bdorado/nfvsec-manager
+  port: 8000
+  env:
+    BROKER_ADDRESS: kafka:9094
+
+service:
+  manager:
+    type: LoadBalancer  # for external access; change to NodePort or ClusterIP if needed
+  kafka:
+    type: ClusterIP

@@ -29,3 +29,12 @@ routes:
     gw: 10.88.0.12
 
 
+secAgent:
+  image: bdorado/nfvsec-agent:latest 
+  vnfId: VNF_ROUTER
+  brokerAddress: kafka:9094
+  publicKey: vnfr-PKEY
+  fgTopic: vnffg_topic
+  timeout: 1000
+  mechanisms: MACsec/manual,IPsec/manual
+  subnet: 10.78.0.0/24

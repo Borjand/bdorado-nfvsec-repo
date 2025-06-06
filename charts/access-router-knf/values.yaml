@@ -39,3 +39,14 @@ network:
       gw: 10.98.0.12
     - dst: 10.88.0.0/24
       gw: 10.98.0.12
+
+
+secAgent:
+  image: bdorado/nfvsec-agent:latest  
+  vnfId: VNF_ACCESS_ROUTER
+  brokerAddress: kafka:9094
+  publicKey: vnfar-PKEY
+  fgTopic: vnffg_topic
+  timeout: 1000
+  mechanisms: IPsec/manual
+  subnet: 10.98.0.0/24

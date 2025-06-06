@@ -23,6 +23,27 @@ spec:
         privileged: true
       ports:
         - containerPort: 80
+
+    - name: sec-agent
+      image: "{{ $.Values.secAgent.image }}"
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: VNF_ID
+          value: "{{ .vnfId }}"
+        - name: BROKER_ADDRESS
+          value: "{{ $.Values.secAgent.brokerAddress }}"
+        - name: PUBLIC_KEY
+          value: "{{ .publicKey }}"
+        - name: VNF_FG_TOPIC
+          value: "{{ $.Values.secAgent.fgTopic }}"
+        - name: DECLARATION_TIMEOUT_MS
+          value: "{{ $.Values.secAgent.timeout }}"
+        - name: PREFERRED_MECHANISMS
+          value: "{{ $.Values.secAgent.mechanisms }}"
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
 ---
 {{- end }}
 

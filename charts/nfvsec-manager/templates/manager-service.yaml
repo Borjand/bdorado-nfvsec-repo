@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-manager
+spec:
+  type: {{ .Values.service.manager.type }}
+  ports:
+    - port: 8000
+      targetPort: {{ .Values.manager.port }}
+  selector:
+    app: security-manager

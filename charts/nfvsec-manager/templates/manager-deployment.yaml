@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: security-manager
+  template:
+    metadata:
+      labels:
+        app: security-manager
+    spec:
+      containers:
+        - name: manager
+          image: {{ .Values.manager.image }}
+          ports:
+            - containerPort: {{ .Values.manager.port }}
+          env:
+            - name: BROKER_ADDRESS
+              value: {{ .Values.manager.env.BROKER_ADDRESS }}
