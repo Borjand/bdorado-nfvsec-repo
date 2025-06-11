@@ -100,7 +100,7 @@ def macsec_manual(vl_id, declarations, interface, prefixlen):
 # --- Configure IPsec manually ---
 def ipsec_manual(vl_id, declarations, interface):
     logger.info(f"Configuring IPsec/manual for {vl_id} on {interface['name']}")
-    
+
     my_decl = next((d for d in declarations if d['vnf_id'] == vnf_id), None)
     if not my_decl:
         logger.error("No local declaration found for IPsec/manual")
@@ -117,11 +117,15 @@ def ipsec_manual(vl_id, declarations, interface):
     my_spi = my_params['spi']
     my_auth_key = my_params['auth_key']
     my_encryption_key = my_params['encryption_key']
-    my_subnet = my_params.get('protected_subnet', f"{my_ip}/32")
+    my_subnet = my_params.get('protected_subnet')
+
+    if not my_subnet:
+        logger.error("Missing 'protected_subnet' in local declaration")
+        return
 
     for peer_decl in declarations:
         if peer_decl['vnf_id'] == vnf_id:
-            continue  # Skip self
+            continue
 
         peer_params = next((m['parameters'] for m in peer_decl['security_mechanisms']
                             if m['mechanism'] == 'IPsec/manual'), None)
@@ -132,47 +136,85 @@ def ipsec_manual(vl_id, declarations, interface):
         peer_spi = peer_params['spi']
         peer_auth_key = peer_params['auth_key']
         peer_encryption_key = peer_params['encryption_key']
-        peer_subnet = peer_params.get('protected_subnet', f"{peer_ip}/32")
+        peer_subnet = peer_params.get('protected_subnet')
+
+        if not peer_subnet:
+            logger.error(f"Missing 'protected_subnet' in peer declaration from {peer_decl['vnf_id']}")
+            continue
+
+        # Determinar reqid por orden lexicográfico
+        sorted_ids = sorted([vnf_id, peer_decl['vnf_id']])
+        my_reqid = 1 if vnf_id == sorted_ids[0] else 2
+        peer_reqid = 2 if my_reqid == 1 else 1
+
+        logger.info(f"[IPsec] Configuring SA: {vnf_id} → {peer_decl['vnf_id']}")
+        logger.info(f"  My IP: {my_ip}")
+        logger.info(f"  Peer IP: {peer_ip}")
+        logger.info(f"  My SPI: {my_spi}")
+        logger.info(f"  My Auth Key: {my_auth_key}")
+        logger.info(f"  My Enc Key: {my_encryption_key}")
+        logger.info(f"  ReqID: {my_reqid}")
+        logger.info(f"[IPsec] Configuring SA: {peer_decl['vnf_id']} → {vnf_id}")
+        logger.info(f"  Peer SPI: {peer_spi}")
+        logger.info(f"  Peer Auth Key: {peer_auth_key}")
+        logger.info(f"  Peer Enc Key: {peer_encryption_key}")
+        logger.info(f"  Peer ReqID: {peer_reqid}")
 
         try:
-            # State: outgoing
             subprocess.run([
-                'ip', 'xfrm', 'state', 'add', 'src', my_ip, 'dst', peer_ip,
+                'ip', 'xfrm', 'state', 'add',
+                'src', my_ip, 'dst', peer_ip,
                 'proto', 'esp', 'spi', my_spi,
                 'auth', 'sha256', my_auth_key,
                 'enc', 'aes', my_encryption_key,
-                'mode', 'tunnel'
+                'mode', 'tunnel',
+                'reqid', str(my_reqid)
             ], check=True)
 
-            # State: incoming
             subprocess.run([
-                'ip', 'xfrm', 'state', 'add', 'src', peer_ip, 'dst', my_ip,
+                'ip', 'xfrm', 'state', 'add',
+                'src', peer_ip, 'dst', my_ip,
                 'proto', 'esp', 'spi', peer_spi,
                 'auth', 'sha256', peer_auth_key,
                 'enc', 'aes', peer_encryption_key,
-                'mode', 'tunnel'
+                'mode', 'tunnel',
+                'reqid', str(peer_reqid)
             ], check=True)
 
-            # Policy: outgoing
             subprocess.run([
-                'ip', 'xfrm', 'policy', 'add', 'src', my_subnet, 'dst', peer_subnet,
-                'dir', 'out', 'tmpl', 'src', my_ip, 'dst', peer_ip,
-                'proto', 'esp', 'mode', 'tunnel'
+                'ip', 'xfrm', 'policy', 'add',
+                'src', my_subnet, 'dst', peer_subnet,
+                'dir', 'out',
+                'tmpl', 'src', my_ip, 'dst', peer_ip,
+                'proto', 'esp', 'mode', 'tunnel',
+                'reqid', str(my_reqid)
             ], check=True)
 
-            # Policy: incoming
             subprocess.run([
-                'ip', 'xfrm', 'policy', 'add', 'src', peer_subnet, 'dst', my_subnet,
-                'dir', 'in', 'tmpl', 'src', peer_ip, 'dst', my_ip,
-                'proto', 'esp', 'mode', 'tunnel'
+                'ip', 'xfrm', 'policy', 'add',
+                'src', peer_subnet, 'dst', my_subnet,
+                'dir', 'fwd',
+                'tmpl', 'src', peer_ip, 'dst', my_ip,
+                'proto', 'esp', 'mode', 'tunnel',
+                'reqid', str(peer_reqid)
             ], check=True)
 
-            logger.info(f"[{peer_decl['vnf_id']}] IPsec/manual configured with peer {peer_ip}")
+            subprocess.run([
+                'ip', 'xfrm', 'policy', 'add',
+                'src', peer_subnet, 'dst', my_subnet,
+                'dir', 'in',
+                'tmpl', 'src', peer_ip, 'dst', my_ip,
+                'proto', 'esp', 'mode', 'tunnel',
+                'reqid', str(peer_reqid)
+            ], check=True)
+
+            logger.info(f"[{peer_decl['vnf_id']}] IPsec/manual successfully configured")
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to configure IPsec with {peer_ip}: {e}")
+            logger.error(f"Failed to configure IPsec with peer {peer_ip}: {e}")
 
 
+# --- Select sec mechanism based on preferences ---
 def select_security_mechanism(declarations, preferred_mechanisms):
     """
     Select a security mechanism supported by all VNFs in the virtual link.
