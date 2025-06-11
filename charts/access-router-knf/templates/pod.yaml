@@ -29,7 +29,7 @@ spec:
 
           # Añadir rutas nuevas
           {{- range .Values.routes }}
-          ip route add {{ .dst }} via {{ .gw }} dev net2
+          # ip route add {{ .dst }} via {{ .gw }} dev net2
           {{- end }}
 
           echo "Router configurado con reglas y rutas estáticas"
