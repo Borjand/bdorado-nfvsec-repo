@@ -213,6 +213,100 @@ def ipsec_manual(vl_id, declarations, interface):
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to configure IPsec with peer {peer_ip}: {e}")
 
+# --- Configure GRE/IPsec manually ---
+def ipsec_transport_gre(vl_id, declarations, interface):
+    logger.info(f"Configuring GRE/IPsec/manual for {vl_id} on {interface['name']}")
+
+    my_decl = next((d for d in declarations if d['vnf_id'] == vnf_id), None)
+    if not my_decl:
+        logger.error("No local declaration found for GRE/IPsec/manual")
+        return
+
+    my_params = next((m['parameters'] for m in my_decl['security_mechanisms']
+                      if m['mechanism'] == 'GRE/IPsec/manual'), None)
+    if not my_params:
+        logger.error("No GRE/IPsec/manual parameters found in local declaration")
+        return
+
+    my_ip = my_params['IP_address']
+    my_spi = my_params['spi']
+    my_auth_key = my_params['auth_key']
+    my_encryption_key = my_params['encryption_key']
+
+    for peer_decl in declarations:
+        if peer_decl['vnf_id'] == vnf_id:
+            continue
+
+        peer_params = next((m['parameters'] for m in peer_decl['security_mechanisms']
+                            if m['mechanism'] == 'GRE/IPsec/manual'), None)
+        if not peer_params:
+            continue
+
+        peer_ip = peer_params['IP_address']
+        peer_spi = peer_params['spi']
+        peer_auth_key = peer_params['auth_key']
+        peer_encryption_key = peer_params['encryption_key']
+
+        sorted_ids = sorted([vnf_id, peer_decl['vnf_id']])
+        my_reqid = 1 if vnf_id == sorted_ids[0] else 2
+        peer_reqid = 2 if my_reqid == 1 else 1
+
+        logger.info(f"[GRE/IPsec] Configuring SA: {vnf_id} → {peer_decl['vnf_id']}")
+        logger.info(f"  My IP: {my_ip}, Peer IP: {peer_ip}, ReqID: {my_reqid}")
+
+        try:
+            subprocess.run([
+                'ip', 'xfrm', 'state', 'add',
+                'src', my_ip, 'dst', peer_ip,
+                'proto', 'esp', 'spi', my_spi,
+                'auth', 'sha256', my_auth_key,
+                'enc', 'aes', my_encryption_key,
+                'mode', 'transport',
+                'reqid', str(my_reqid)
+            ], check=True)
+
+            subprocess.run([
+                'ip', 'xfrm', 'state', 'add',
+                'src', peer_ip, 'dst', my_ip,
+                'proto', 'esp', 'spi', peer_spi,
+                'auth', 'sha256', peer_auth_key,
+                'enc', 'aes', peer_encryption_key,
+                'mode', 'transport',
+                'reqid', str(peer_reqid)
+            ], check=True)
+
+            subprocess.run([
+                'ip', 'xfrm', 'policy', 'add',
+                'src', my_ip, 'dst', peer_ip,
+                'dir', 'out',
+                'tmpl', 'src', my_ip, 'dst', peer_ip,
+                'proto', 'esp', 'mode', 'transport',
+                'reqid', str(my_reqid)
+            ], check=True)
+
+            subprocess.run([
+                'ip', 'xfrm', 'policy', 'add',
+                'src', peer_ip, 'dst', my_ip,
+                'dir', 'in',
+                'tmpl', 'src', peer_ip, 'dst', my_ip,
+                'proto', 'esp', 'mode', 'transport',
+                'reqid', str(peer_reqid)
+            ], check=True)
+
+            gre_iface = f"gre{vnf_id.lower()}"
+            gre_local_octet = my_ip.split('.')[-1]
+            gre_ip = f"10.0.0.{gre_local_octet}"
+
+            subprocess.run([
+                'ip', 'tunnel', 'add', gre_iface, 'mode', 'gre', 'local', my_ip, 'remote', peer_ip], check=True)
+            subprocess.run(['ip', 'addr', 'add', f"{gre_ip}/30", 'dev', gre_iface], check=True)
+            subprocess.run(['ip', 'link', 'set', gre_iface, 'up'], check=True)
+
+            logger.info(f"[GRE] Created {gre_iface} with IP {gre_ip}/30 over {interface['name']}")
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to configure GRE over IPsec: {e}")
+
 
 # --- Select sec mechanism based on preferences ---
 def select_security_mechanism(declarations, preferred_mechanisms):
@@ -293,6 +387,18 @@ def build_declaration(preferences, interface, index):
                 'parameters': ipsec_params
             })
 
+        elif mech == 'GRE/IPsec/manual':
+            ipsec_params = {
+                'IP_address': interface['IP_address'],
+                'spi': hex(random.getrandbits(32)),
+                'encryption_key': generate_ipsec_key(16),
+                'auth_key': generate_ipsec_key(32)
+            }
+            mechanisms.append({
+                'mechanism': 'GRE/IPsec/manual',
+                'parameters': ipsec_params
+            })
+
     return {
         'vnf_id': vnf_id,
         'security_mechanisms': mechanisms,
@@ -321,6 +427,8 @@ def security_agent_worker(vl, interface, prefixlen):
         macsec_manual(vl['vl_id'], declarations, interface, prefixlen)
     elif selected == 'IPsec/manual':
         ipsec_manual(vl['vl_id'], declarations, interface)
+    elif selected == 'GRE/IPsec/manual':
+        ipsec_transport_gre(vl['vl_id'], declarations, interface)
     else:
         logger.warning(f"[{vl['vl_id']}] No implementation for selected mechanism: {selected}")
 
