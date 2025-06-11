@@ -294,13 +294,13 @@ def ipsec_transport_gre(vl_id, declarations, interface):
                 'reqid', str(peer_reqid)
             ], check=True)
 
-            gre_iface = f"gre{vnf_id.lower()}"
+            gre_iface = f"gre1"
             gre_local_octet = my_ip.split('.')[-1]
             gre_ip = f"10.0.0.{gre_local_octet}"
 
             subprocess.run([
                 'ip', 'tunnel', 'add', gre_iface, 'mode', 'gre', 'local', my_ip, 'remote', peer_ip], check=True)
-            subprocess.run(['ip', 'addr', 'add', f"{gre_ip}/30", 'dev', gre_iface], check=True)
+            subprocess.run(['ip', 'addr', 'add', f"{gre_ip}/24", 'dev', gre_iface], check=True)
             subprocess.run(['ip', 'link', 'set', gre_iface, 'up'], check=True)
 
             logger.info(f"[GRE] Created {gre_iface} with IP {gre_ip}/30 over {interface['name']}")
@@ -410,7 +410,10 @@ def build_declaration(preferences, interface, index):
 # --- Worker thread to apply security settings ---
 def security_agent_worker(vl, interface, prefixlen):
     logger.info(f"Worker started for link {vl['vl_id']}")
-    messages = KafkaConsumer(
+    expected_declarations = len(vl['neighbours'])
+    logger.info(f"Expecting {expected_declarations} declarations for VL {vl['vl_id']}")
+
+    consumer = KafkaConsumer(
         vl['vl_id'],
         bootstrap_servers=[broker_address],
         auto_offset_reset='earliest',
@@ -418,8 +421,24 @@ def security_agent_worker(vl, interface, prefixlen):
         value_deserializer=lambda x: loads(x.decode('utf-8'))
     )
 
-    declarations = [msg.value for msg in messages]
-    logger.info(f"Declarations received: {len(declarations)}")
+    declarations = []
+    seen_vnfs = set()
+
+    for msg in consumer:
+        declaration = msg.value
+        sender = declaration.get('vnf_id')
+
+        if sender not in seen_vnfs:
+            declarations.append(declaration)
+            seen_vnfs.add(sender)
+            logger.info(f"Received declaration from {sender} ({len(seen_vnfs)}/{expected_declarations})")
+
+        if len(seen_vnfs) >= expected_declarations:
+            logger.info("Received all expected declarations.")
+            break
+
+    if len(declarations) < expected_declarations:
+        logger.warning(f"Only received {len(declarations)} declarations, expected {expected_declarations}")
 
     selected = select_security_mechanism(declarations, preferred_mechanisms)
     logger.info(f"Selected security mechanism for {vl['vl_id']}: {selected}")
@@ -433,6 +452,7 @@ def security_agent_worker(vl, interface, prefixlen):
     else:
         logger.warning(f"[{vl['vl_id']}] No implementation for selected mechanism: {selected}")
 
+
 # --- Main logic ---
 def main():
     wait_for_kafka(broker_address)
@@ -445,7 +465,10 @@ def main():
     consumer = KafkaConsumer(
         vnffg_topic,
         bootstrap_servers=[broker_address],
-        value_deserializer=lambda x: loads(x.decode('utf-8'))
+        value_deserializer=lambda x: loads(x.decode('utf-8')),
+        group_id=f"{vnf_id}-group",
+        auto_offset_reset='earliest',
+        enable_auto_commit=False
     )
 
     for vnf_fg in consumer:

@@ -26,7 +26,7 @@ nodeSelector:
 secAgent:
   image: bdorado/nfvsec-agent:latest 
   vnfId: VNF_LOADBALANCER
-  brokerAddress: kafka:9094
+  brokerAddress: kafka:9092
   publicKey: vnflb-PKEY
   fgTopic: vnffg_topic
   timeout: 1000

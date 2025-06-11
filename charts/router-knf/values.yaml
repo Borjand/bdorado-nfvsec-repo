@@ -32,7 +32,7 @@ routes:
 secAgent:
   image: bdorado/nfvsec-agent:latest 
   vnfId: VNF_ROUTER
-  brokerAddress: kafka:9094
+  brokerAddress: kafka:9092
   publicKey: vnfr-PKEY
   fgTopic: vnffg_topic
   timeout: 1000
