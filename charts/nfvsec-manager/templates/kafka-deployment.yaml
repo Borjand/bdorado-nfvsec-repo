@@ -36,3 +36,7 @@ spec:
               value: "1@localhost:9093"
             - name: KAFKA_CLUSTER_ID
               value: "kafka_cluster"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS
+              value: "1"

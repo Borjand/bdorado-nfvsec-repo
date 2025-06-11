@@ -40,7 +40,7 @@ spec:
 
     - name: sec-agent
       image: "{{ .Values.secAgent.image }}"
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       env:
         - name: VNF_ID
           value: "{{ .Values.secAgent.vnfId }}"
