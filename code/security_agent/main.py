@@ -45,9 +45,10 @@ def wait_for_kafka(broker, retries=10, delay=2):
             time.sleep(delay)
     raise RuntimeError("Kafka not available after maximum retries.")
 
-# --- Generate symmetric key ---
+# --- Generate symmetric key for MACsec---
 def get_random_key(n_bits):
-    return hex(random.getrandbits(n_bits))[2:]
+    n_bytes = n_bits // 8
+    return os.urandom(n_bytes).hex()
 
 # --- Generate MACsec key ID ---
 def get_macsec_key_id(index):
