@@ -1,16 +1,25 @@
 kafka:
-  image: apache/kafka-native:4.0.0
-  port: 9094
-  clusterIP: None  # headless by default for testing
+  image: bitnami/kafka:3.7.0
+  zookeeperImage: bitnami/zookeeper:3.8
+  port: 9092
+  zookeeperPort: 2181
+  clusterIP: None
+
+  config:
+    KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+    KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+    KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+    KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ALLOW_PLAINTEXT_LISTENER: yes
 
 manager:
   image: bdorado/nfvsec-manager
   port: 8000
   env:
-    BROKER_ADDRESS: kafka:9094
+    BROKER_ADDRESS: kafka:9092
 
 service:
-  manager:
-    type: LoadBalancer  # for external access; change to NodePort or ClusterIP if needed
   kafka:
     type: ClusterIP
+  manager:
+    type: LoadBalancer

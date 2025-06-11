@@ -5,7 +5,7 @@ metadata:
 spec:
   type: {{ .Values.service.kafka.type }}
   ports:
-    - port: 9094
-      targetPort: 9094
+    - port: {{ .Values.kafka.port }}
+      targetPort: {{ .Values.kafka.port }}
   selector:
     app: kafka
