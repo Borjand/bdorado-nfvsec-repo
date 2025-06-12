@@ -27,4 +27,4 @@ spec:
             - name: KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: {{ .Values.kafka.config.KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR | quote }}
             - name: ALLOW_PLAINTEXT_LISTENER
-              value: {{ .Values.kafka.config.ALLOW_PLAINTEXT_LISTENER }}
+              value: "{{ .Values.kafka.config.ALLOW_PLAINTEXT_LISTENER }}"
