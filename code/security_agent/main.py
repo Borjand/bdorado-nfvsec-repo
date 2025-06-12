@@ -467,7 +467,7 @@ def main():
         bootstrap_servers=[broker_address],
         value_deserializer=lambda x: loads(x.decode('utf-8')),
         group_id=f"{vnf_id}-group",
-        auto_offset_reset='earliest',
+        auto_offset_reset='latest',
         enable_auto_commit=False
     )
 
