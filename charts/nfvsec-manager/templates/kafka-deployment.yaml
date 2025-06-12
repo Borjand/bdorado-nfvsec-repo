@@ -16,12 +16,17 @@ spec:
         - name: kafka
           image: {{ .Values.kafka.image }}
           ports:
-            - containerPort: {{ .Values.kafka.port }}
+            - containerPort: {{ .Values.kafka.port }}         # 9092 interno
+            - containerPort: 9094                              # 9094 externo (fijo)
           env:
             - name: KAFKA_CFG_LISTENERS
               value: {{ .Values.kafka.config.KAFKA_CFG_LISTENERS }}
             - name: KAFKA_CFG_ADVERTISED_LISTENERS
               value: {{ .Values.kafka.config.KAFKA_CFG_ADVERTISED_LISTENERS }}
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: {{ .Values.kafka.config.KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP }}
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: {{ .Values.kafka.config.KAFKA_CFG_INTER_BROKER_LISTENER_NAME }}
             - name: KAFKA_CFG_ZOOKEEPER_CONNECT
               value: {{ .Values.kafka.config.KAFKA_CFG_ZOOKEEPER_CONNECT }}
             - name: KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR

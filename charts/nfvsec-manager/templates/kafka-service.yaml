@@ -4,8 +4,13 @@ metadata:
   name: kafka
 spec:
   type: {{ .Values.service.kafka.type }}
+  loadBalancerIP: {{ .Values.service.kafka.loadBalancerIP }}
   ports:
-    - port: {{ .Values.kafka.port }}
+    - name: internal
+      port: {{ .Values.kafka.port }}
       targetPort: {{ .Values.kafka.port }}
+    - name: external
+      port: {{ .Values.kafka.externalPort }}
+      targetPort: {{ .Values.kafka.externalPort }}
   selector:
     app: kafka

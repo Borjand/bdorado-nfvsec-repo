@@ -1,6 +1,6 @@
-curl -X POST http://172.18.255.200:8000/topology   -H "Content-Type: application/json"   -d '[
+curl -X POST http://10.4.35.35:8000/topology   -H "Content-Type: application/json"   -d '[
     {
-      "vl_id": "ns_001.vl_001",
+      "vl_id": "ns_002.vl_001",
       "neighbours": [
         {
           "vnf_id": "VNF_ROUTER",
@@ -30,7 +30,7 @@ curl -X POST http://172.18.255.200:8000/topology   -H "Content-Type: application
       ]
     },
     {
-      "vl_id": "ns_001.vl_002",
+      "vl_id": "ns_002.vl_002",
       "neighbours": [
         {
           "vnf_id": "VNF_ROUTER",
