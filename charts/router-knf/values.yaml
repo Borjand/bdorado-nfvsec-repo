@@ -36,5 +36,5 @@ secAgent:
   publicKey: vnfr-PKEY
   fgTopic: vnffg_topic
   timeout: 1000
-  mechanisms: MACsec/manual,IPsec/manual
+  mechanisms: MACsec/manual,GRE/IPsec/manual
   subnet: 10.78.0.0/24

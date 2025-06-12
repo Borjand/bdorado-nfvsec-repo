@@ -48,5 +48,5 @@ secAgent:
   publicKey: vnfar-PKEY
   fgTopic: vnffg_topic
   timeout: 1000
-  mechanisms: IPsec/manual
+  mechanisms: GRE/IPsec/manual
   subnet: 10.98.0.0/24
