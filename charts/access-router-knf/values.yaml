@@ -14,7 +14,7 @@ env:
   ALLOWED_PORT: "80"
 
 nodeSelector:
-  kubernetes.io/hostname: nfv-sec-cluster-worker2
+  kubernetes.io/hostname: test-kubeadm-cluster-2
 
 interfaces:
   - name: access-l2-net

@@ -37,7 +37,7 @@ servers:
     publicKey: vnfws-2-PKEY
 
 nodeSelector:
-  kubernetes.io/hostname: nfv-sec-cluster-worker
+  kubernetes.io/hostname: test-kubeadm-cluster-1
 
 
 

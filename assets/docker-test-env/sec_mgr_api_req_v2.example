@@ -1,0 +1,17 @@
+curl -X POST http://10.4.35.35:8000/topology   -H "Content-Type: application/json"   -d '[
+    {
+      "vl_id": "ns_001.vl_002",
+      "neighbours": [
+        {
+          "vnf_id": "VNF_ROUTER",
+          "interface": "net2",
+          "publickey": "vnfr-PKEY"
+        },
+        {
+          "vnf_id": "VNF_ACCESS_ROUTER",
+          "interface": "net2",
+          "publickey": "vnfar-PKEY"
+        }
+      ]
+    }
+  ]'
