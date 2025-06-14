@@ -39,7 +39,7 @@ curl -X POST http://10.4.35.35:8000/topology   -H "Content-Type: application/jso
         },
         {
           "vnf_id": "VNF_ACCESS_ROUTER",
-          "interface": "net2",
+          "interface": "ens4",
           "publickey": "vnfar-PKEY"
         }
       ]

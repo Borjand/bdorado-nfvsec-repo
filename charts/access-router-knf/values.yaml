@@ -44,7 +44,7 @@ network:
 secAgent:
   image: bdorado/nfvsec-agent:latest  
   vnfId: VNF_ACCESS_ROUTER
-  brokerAddress: kafka:9092
+  brokerAddress: 10.4.35.36:9094
   publicKey: vnfar-PKEY
   fgTopic: vnffg_topic
   timeout: 1000

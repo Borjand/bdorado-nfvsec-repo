@@ -43,7 +43,7 @@ nodeSelector:
 
 secAgent:
   image: bdorado/nfvsec-agent:latest 
-  brokerAddress: kafka:9092
+  brokerAddress: 10.4.35.36:9094
   fgTopic: vnffg_topic
   timeout: 1000
   mechanisms: MACsec/manual,IPsec/manual
