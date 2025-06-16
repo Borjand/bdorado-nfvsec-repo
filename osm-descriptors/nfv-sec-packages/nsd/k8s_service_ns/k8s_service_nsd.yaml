@@ -1,0 +1,41 @@
+nsd:
+  nsd:
+  - description: NS with 3 KNFs
+    df:
+    - id: default-df
+      vnf-profile:
+      - id: knf-router
+        virtual-link-connectivity:
+        - constituent-cpd-id:
+          - constituent-base-element-id: knf-router
+            constituent-cpd-id: mgmt-ext
+          virtual-link-profile-id: mgmtnet
+        vnfd-id: router_fw__knf
+
+      - id: knf-lb
+        virtual-link-connectivity:
+        - constituent-cpd-id:
+          - constituent-base-element-id: knf-lb
+            constituent-cpd-id: mgmt-ext
+          virtual-link-profile-id: mgmtnet
+        vnfd-id: load_balancer_knf
+
+      - id: knf-ws
+        virtual-link-connectivity:
+        - constituent-cpd-id:
+          - constituent-base-element-id: knf-ws
+            constituent-cpd-id: mgmt-ext
+          virtual-link-profile-id: mgmtnet
+        vnfd-id: web_server_knf
+
+    id: k8s_service-ns
+    name: k8s_service-ns
+    version: 1.0
+    virtual-link-desc:
+    - id: mgmtnet
+      mgmt-network: true
+
+    vnfd-id:
+    - router_fw__knf
+    - load_balancer_knf
+    - web_server_knf
