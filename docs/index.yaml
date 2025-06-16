@@ -3,9 +3,9 @@ entries:
   access-router-knf:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-05-29T13:51:27.063913+02:00"
+    created: "2025-06-16T13:39:23.803497+02:00"
     description: Access router KNF (client side)
-    digest: 1443b336d343e212df2f04d2beec489454cbcfa0ac7d82fe279a3771644d99ed
+    digest: e46375fbe42916bf5417b1466fd485c78eb00f41ceb92cf68493298c44e2c0d3
     name: access-router-knf
     type: application
     urls:
@@ -14,9 +14,9 @@ entries:
   client:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-05-29T13:51:27.064141+02:00"
+    created: "2025-06-16T13:39:23.803673+02:00"
     description: Client chart to test end-to-end connectivity and VoD service
-    digest: c4e7016358ec21f1d9d70d4d4b6149f5eaa45bb1bc78e26515a21345ba237f31
+    digest: 7ceed1756798875605250b0b49d658326312f500f61c037896b5236ed17733bb
     name: client
     type: application
     urls:
@@ -25,20 +25,31 @@ entries:
   load-balancer-knf:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-05-29T13:51:27.064346+02:00"
+    created: "2025-06-16T13:39:23.803876+02:00"
     description: Simple load-balancer KNF based on HAProxy
-    digest: e9474196a232b44bcbeb7802ce359d0264ac72430f4669068cdd5140c773daac
+    digest: 8c71ba059282be11f429238229c741c740b5079d3c928d554f053d6c1e7125fb
     name: load-balancer-knf
     type: application
     urls:
     - https://borjand.github.io/bdorado-nfvsec-repo/load-balancer-knf-1.0.0.tgz
     version: 1.0.0
+  nfvsec-manager:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2025-06-16T13:39:23.804092+02:00"
+    description: A Helm chart to deploy Security Manager and Kafka
+    digest: 56aa22c9717515b5e69b022f11a34ba6df2ae0299d1d698b1adc987beb1b7c86
+    name: nfvsec-manager
+    type: application
+    urls:
+    - https://borjand.github.io/bdorado-nfvsec-repo/nfvsec-manager-1.0.0.tgz
+    version: 1.0.0
   router-knf:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-05-29T13:51:27.064603+02:00"
+    created: "2025-06-16T13:39:23.804287+02:00"
     description: Simple firewall/router KNF implemented with iproute2 and iptables
-    digest: 5834794b77ab0dc3ac76fcf76ae1c3174e0f85f1febadfbe8f1406f3634c7aea
+    digest: 76fddcf1f9fb3e192a3b88900db6a7d0c5b1007fe75048186f346490dd7bd9f3
     name: router-knf
     type: application
     urls:
@@ -47,12 +58,12 @@ entries:
   web-server-knf:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-05-29T13:51:27.064882+02:00"
+    created: "2025-06-16T13:39:23.80449+02:00"
     description: Chart for executing the different web server KNFs based on Apache
-    digest: 81b3869f2818eec03037a3918c0cd77d288e7d4abb85d4e69d360e35a706dec8
+    digest: a9bb53f9b08594203fc11e746701e1780517ad9d03010b1ccbcd7b79deedcdff
     name: web-server-knf
     type: application
     urls:
     - https://borjand.github.io/bdorado-nfvsec-repo/web-server-knf-1.0.0.tgz
     version: 1.0.0
-generated: "2025-05-29T13:51:27.063101+02:00"
+generated: "2025-06-16T13:39:23.802682+02:00"
