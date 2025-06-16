@@ -8,7 +8,7 @@ kafka:
 
   config:
     KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,EXTERNAL://:9094
-    KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://10.4.35.36:9094
+    KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka.default.svc.cluster.local:9092,EXTERNAL://10.4.16.36:9094
     KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
     KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
     KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -24,7 +24,7 @@ manager:
 service:
   kafka:
     type: LoadBalancer
-    loadBalancerIP: 10.4.35.36     # IP fija externa asignada por MetalLB
+    loadBalancerIP: 10.4.16.36     # IP fija externa asignada por MetalLB
   manager:
     type: LoadBalancer
-    loadBalancerIP: 10.4.35.35
+    loadBalancerIP: 10.4.16.35

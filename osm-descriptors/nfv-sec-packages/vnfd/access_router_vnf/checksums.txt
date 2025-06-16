@@ -1,0 +1,3 @@
+64a97b8d423f89cdc128c8d335ac1023	access_router_vnf/access_router_vnfd.yaml
+bc681c5a4c3cdc09c013df2d2239f3d2	access_router_vnf/icons/osm.png
+aabbe6ca73d6c39561441456787c9b66	access_router_vnf/cloud_init/cloud-config.txt

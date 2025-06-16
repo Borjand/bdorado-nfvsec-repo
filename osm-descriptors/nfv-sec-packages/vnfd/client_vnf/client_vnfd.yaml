@@ -1,0 +1,71 @@
+vnfd:
+  description: A client VNF
+
+  df:
+  - id: default-df
+    instantiation-level:
+    - id: default-instantiation-level
+      vdu-level:
+      - number-of-instances: 1
+        vdu-id: mgmtVM
+    vdu-profile:
+    - id: mgmtVM
+      min-number-of-instances: 1
+
+  ext-cpd:
+  - id: vnf-mgmt-ext
+    int-cpd:
+      cpd: mgmtVM-eth0-int
+      vdu-id: mgmtVM
+  - id: vnf-data-ext
+    int-cpd:
+      cpd: mgmtVM-eth1-int
+      vdu-id: mgmtVM
+
+  id: client-vnf
+
+  mgmt-cp: vnf-mgmt-ext
+
+  product-name: client-vnf
+
+  sw-image-desc:
+  - id: ubuntu22.04
+    image: ubuntu22.04
+    name: ubuntu22.04
+
+  vdu:
+  - cloud-init-file: cloud-config.txt
+    id: mgmtVM
+    int-cpd:
+    - id: mgmtVM-eth0-int
+      port-security-enabled: false
+      virtual-network-interface-requirement:
+      - name: mgmtVM-eth0
+        position: 1
+        virtual-interface:
+          type: PARAVIRT
+    - id: mgmtVM-eth1-int
+      port-security-enabled: false
+      virtual-network-interface-requirement:
+      - name: mgmtVM-eth1
+        position: 2
+        virtual-interface:
+          type: PARAVIRT
+    name: mgmtVM
+    sw-image-desc: ubuntu22.04
+    virtual-compute-desc: mgmtVM-compute
+    virtual-storage-desc:
+    - mgmtVM-storage
+
+  version: 1.0
+
+  virtual-compute-desc:
+  - id: mgmtVM-compute
+    virtual-cpu:
+      num-virtual-cpu: 1
+    virtual-memory:
+      size: 2.0
+
+  virtual-storage-desc:
+  - id: mgmtVM-storage
+    size-of-storage: 10

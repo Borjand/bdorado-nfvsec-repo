@@ -1,0 +1,49 @@
+nsd:
+  nsd:
+  - description: NS with 2 VNFs with cloudinit connected by datanet and mgmtnet VLs
+    df:
+    - id: default-df
+      vnf-profile:
+      - id: vnf1
+        virtual-link-connectivity:
+        - constituent-cpd-id:
+          - constituent-base-element-id: vnf1
+            constituent-cpd-id: vnf-mgmt-ext
+          virtual-link-profile-id: mgmtnet
+        - constituent-cpd-id:
+          - constituent-base-element-id: vnf1
+            constituent-cpd-id: vnf-data-ext
+          virtual-link-profile-id: datanet
+        - constituent-cpd-id:
+          - constituent-base-element-id: vnf1
+            constituent-cpd-id: vnf-int-ext
+          virtual-link-profile-id: intnet
+        vnfd-id: access_router-vnf
+      - id: vnf2
+        virtual-link-connectivity:
+        - constituent-cpd-id:
+          - constituent-base-element-id: vnf1
+            constituent-cpd-id: vnf-mgmt-ext
+          virtual-link-profile-id: mgmtnet
+        - constituent-cpd-id:
+          - constituent-base-element-id: vnf1
+            constituent-cpd-id: vnf-data-ext
+          virtual-link-profile-id: intnet
+        vnfd-id: client-vnf
+
+    id: access_router-ns
+    name: access_router-ns
+    version: 1.0
+    virtual-link-desc:
+    - id: mgmtnet
+      mgmt-network: true
+      vim-network-name: control-provider
+    - id: datanet
+      mgmt-network: false
+      vim-network-name: vlan_l2s_test_17
+    - id: intnet
+      mgmt-network: false
+
+    vnfd-id:
+    - access_router-vnf
+    - client-vnf

@@ -1,0 +1,3 @@
+cbe6e6e8a2989bfde90ad802afe218d3	client_vnf/client_vnfd.yaml
+bc681c5a4c3cdc09c013df2d2239f3d2	client_vnf/icons/osm.png
+edbfa830e4e49badd268f919a1aca60a	client_vnf/cloud_init/cloud-config.txt
