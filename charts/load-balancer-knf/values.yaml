@@ -21,7 +21,7 @@ backendServers:
   - ip: 10.78.0.103
 
 nodeSelector:
-  kubernetes.io/hostname: test-kubeadm-cluster-1
+  kubernetes.io/hostname: microk8s-cluster-1
 
 secAgent:
   image: bdorado/nfvsec-agent:latest 

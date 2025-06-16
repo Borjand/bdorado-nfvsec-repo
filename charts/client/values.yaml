@@ -11,7 +11,7 @@ image:
   pullPolicy: IfNotPresent
 
 nodeSelector:
-  kubernetes.io/hostname: test-kubeadm-cluster-2
+  kubernetes.io/hostname: microk8s-cluster-2
 
 interfaces:
   - name: access-l2-net
