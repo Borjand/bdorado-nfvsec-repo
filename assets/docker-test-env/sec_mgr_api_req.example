@@ -1,4 +1,4 @@
-curl -X POST http://10.4.35.35:8000/topology   -H "Content-Type: application/json"   -d '[
+curl -X POST http://10.4.16.35:8000/topology   -H "Content-Type: application/json"   -d '[
     {
       "vl_id": "ns_002.vl_001",
       "neighbours": [
@@ -38,7 +38,7 @@ curl -X POST http://10.4.35.35:8000/topology   -H "Content-Type: application/jso
           "publickey": "vnfr-PKEY"
         },
         {
-          "vnf_id": "VNF_ACCESS_ROUTER",
+          "vnf_id": "VNF_ACCESSROUTER",
           "interface": "ens4",
           "publickey": "vnfar-PKEY"
         }
