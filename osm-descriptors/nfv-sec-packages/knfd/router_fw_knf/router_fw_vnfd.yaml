@@ -5,7 +5,7 @@ vnfd:
   ext-cpd:
   - id: mgmt-ext
     k8s-cluster-net: mgmtnet
-  id: router_fw__knf
+  id: router_fw_knf
   k8s-cluster:
     nets:
     - id: mgmtnet
