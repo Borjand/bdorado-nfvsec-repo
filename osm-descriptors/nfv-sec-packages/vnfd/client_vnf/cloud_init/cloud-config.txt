@@ -18,6 +18,7 @@ runcmd:
     ip addr flush dev ens4
     ip addr add 10.98.0.101/24 dev ens4
     ip link set ens4 up
+    ip link set mtu 1350 dev ens4
   - |
     # Add static route
     ip route add 10.78.0.0/24 via 10.98.0.12 dev ens4
