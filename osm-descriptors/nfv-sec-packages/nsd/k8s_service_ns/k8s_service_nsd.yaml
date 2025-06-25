@@ -10,7 +10,7 @@ nsd:
           - constituent-base-element-id: knf-router
             constituent-cpd-id: mgmt-ext
           virtual-link-profile-id: mgmtnet
-        vnfd-id: router_fw__knf
+        vnfd-id: router_fw_knf
 
       - id: knf-lb
         virtual-link-connectivity:
@@ -36,6 +36,6 @@ nsd:
       mgmt-network: true
 
     vnfd-id:
-    - router_fw__knf
+    - router_fw_knf
     - load_balancer_knf
     - web_server_knf

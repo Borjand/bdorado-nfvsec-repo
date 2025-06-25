@@ -3,3 +3,22 @@ password: ubuntu
 chpasswd: { expire: False }
 ssh_pwauth: True
 
+package_update: true
+packages:
+  - net-tools
+  - iproute2
+  - apache2-utils
+
+runcmd:
+  - |
+    HNAME=$(hostname)
+    echo "127.0.1.1 $HNAME" >> /etc/hosts
+  - |
+    # Change ip of ens4 iface
+    ip addr flush dev ens4
+    ip addr add 10.98.0.101/24 dev ens4
+    ip link set ens4 up
+  - |
+    # Add static route
+    ip route add 10.78.0.0/24 via 10.98.0.12 dev ens4
+  - bash -c "source /root/sec_agent_env.sh && nohup python3 /opt/nfvsec/code/security_agent/main.py > /var/log/sec-agent.log 2>&1 &"

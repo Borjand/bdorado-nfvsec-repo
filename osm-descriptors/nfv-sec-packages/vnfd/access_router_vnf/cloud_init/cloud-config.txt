@@ -8,6 +8,8 @@ packages:
   - python3
   - python3-pip
   - git
+  - net-tools
+  - iproute2  
 
 write_files:
   - path: /root/sec_agent_env.sh
@@ -24,4 +26,17 @@ write_files:
 runcmd:
   - pip3 install kafka-python pyroute2
   - git clone https://github.com/Borjand/bdorado-nfvsec-repo.git /opt/nfvsec
+  - |
+    HNAME=$(hostname)
+    echo "127.0.1.1 $HNAME" >> /etc/hosts
+  - |
+    # Change iface ens5 IP address
+    ip addr flush dev ens4
+    ip addr add 10.88.0.12/24 dev ens4
+    ip link set ens4 up
+  - |
+    # Change iface ens5 IP address
+    ip addr flush dev ens5
+    ip addr add 10.98.0.12/24 dev ens4
+    ip link set ens5 up
   - bash -c "source /root/sec_agent_env.sh && nohup python3 /opt/nfvsec/code/security_agent/main.py > /var/log/sec-agent.log 2>&1 &"
