@@ -39,4 +39,9 @@ runcmd:
     ip addr flush dev ens5
     ip addr add 10.98.0.12/24 dev ens5
     ip link set ens5 up
+  - |
+    # Enable IPV4 forwarding
+    sysctl -w net.ipv4.ip_forward=1
+    sed -i '/^net.ipv4.ip_forward/d' /etc/sysctl.conf
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
   - bash -c "source /root/sec_agent_env.sh && nohup python3 /opt/nfvsec/code/security_agent/main.py > /var/log/sec-agent.log 2>&1 &"
