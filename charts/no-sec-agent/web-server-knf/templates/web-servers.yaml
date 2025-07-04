@@ -1,0 +1,28 @@
+{{- range .Values.servers }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .name }}
+  labels:
+    app: web
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [{
+        "name": "{{ $.Values.network.name }}",
+        "interface": "net1",
+        "ips": ["{{ .ip }}/24"]
+      }]
+spec:
+  nodeSelector:
+    {{- toYaml $.Values.nodeSelector | nindent 4 }}
+  containers:
+    - name: web-server
+      image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+      imagePullPolicy: {{ $.Values.image.pullPolicy }}
+      securityContext:
+        privileged: true
+      ports:
+        - containerPort: 80
+---
+{{- end }}
+

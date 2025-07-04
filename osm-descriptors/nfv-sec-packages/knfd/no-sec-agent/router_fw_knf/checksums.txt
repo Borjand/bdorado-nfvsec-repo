@@ -1,0 +1,1 @@
+5463a8eac9341af9079324305343fe48	router_fw_knf/router_fw_vnfd.yaml

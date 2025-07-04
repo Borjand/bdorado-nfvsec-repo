@@ -20,7 +20,7 @@ done
 
 # Static route for router through the GRE tunnel
 POD=router
-ROUTE_COMMAND="ip route add 10.98.0.0/24 via 10.88.0.12"
+ROUTE_COMMAND="ip route add 10.98.0.0/24 via 10.0.0.12"
 echo "➤ Añadiendo ruta en pod: $POD"
 kubectl exec -n "$NAMESPACE" "$POD" -c "$CONTAINER" -- bash -c "$ROUTE_COMMAND"
 

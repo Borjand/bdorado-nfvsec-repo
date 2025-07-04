@@ -1,0 +1,1 @@
+f349ed91d606e9c5fa9f220a1136ea42	web_server_knf/web_server_vnfd.yaml

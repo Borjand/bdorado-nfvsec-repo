@@ -3,7 +3,7 @@ entries:
   access-router-knf:
   - apiVersion: v2
     appVersion: 1.1.0
-    created: "2025-06-23T13:43:48.147957+02:00"
+    created: "2025-07-04T11:53:21.751974+02:00"
     description: Access router KNF (client side)
     digest: bc4a8fb05e4795336081e929199349561fc67e1f8b92fa6e63331ccc3d0ea3ba
     name: access-router-knf
@@ -13,7 +13,7 @@ entries:
     version: 1.1.0
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-06-23T13:43:48.147646+02:00"
+    created: "2025-07-04T11:53:21.751597+02:00"
     description: Access router KNF (client side)
     digest: e46375fbe42916bf5417b1466fd485c78eb00f41ceb92cf68493298c44e2c0d3
     name: access-router-knf
@@ -24,7 +24,7 @@ entries:
   client:
   - apiVersion: v2
     appVersion: 1.1.0
-    created: "2025-06-23T13:43:48.148343+02:00"
+    created: "2025-07-04T11:53:21.752445+02:00"
     description: Client chart to test end-to-end connectivity and VoD service
     digest: e23167042bf64de95624d758c7e63ac6608df50ccb9e8ecb4f099392abb35db6
     name: client
@@ -34,7 +34,7 @@ entries:
     version: 1.1.0
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-06-23T13:43:48.148131+02:00"
+    created: "2025-07-04T11:53:21.752198+02:00"
     description: Client chart to test end-to-end connectivity and VoD service
     digest: 7ceed1756798875605250b0b49d658326312f500f61c037896b5236ed17733bb
     name: client
@@ -44,8 +44,18 @@ entries:
     version: 1.0.0
   load-balancer-knf:
   - apiVersion: v2
+    appVersion: 1.5.0
+    created: "2025-07-04T11:53:21.753018+02:00"
+    description: Simple load-balancer KNF based on HAProxy
+    digest: 93b4a011038bfff218b24e183943acc811d8854a51c5b4b0b30f80c6e074c211
+    name: load-balancer-knf
+    type: application
+    urls:
+    - https://borjand.github.io/bdorado-nfvsec-repo/load-balancer-knf-1.5.0.tgz
+    version: 1.5.0
+  - apiVersion: v2
     appVersion: 1.1.0
-    created: "2025-06-23T13:43:48.148545+02:00"
+    created: "2025-07-04T11:53:21.752811+02:00"
     description: Simple load-balancer KNF based on HAProxy
     digest: 642bab4888057116e5bd9c2ccbc43b18929c337cb4b65d5d426e36e6e803c245
     name: load-balancer-knf
@@ -56,7 +66,7 @@ entries:
   nfvsec-manager:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-06-23T13:43:48.148758+02:00"
+    created: "2025-07-04T11:53:21.753385+02:00"
     description: A Helm chart to deploy Security Manager and Kafka
     digest: fc18137b057713bbc64385202baccc3d24ebe8cf2208a3d96d6b2090b6cc5acf
     name: nfvsec-manager
@@ -66,8 +76,18 @@ entries:
     version: 1.0.0
   router-knf:
   - apiVersion: v2
+    appVersion: 1.5.0
+    created: "2025-07-04T11:53:21.75419+02:00"
+    description: Simple firewall/router KNF implemented with iproute2 and iptables
+    digest: 7b49c46f3dcacca7274521aa72c2306d5de99b24eb427ba55f5630cd0599ac67
+    name: router-knf
+    type: application
+    urls:
+    - https://borjand.github.io/bdorado-nfvsec-repo/router-knf-1.5.0.tgz
+    version: 1.5.0
+  - apiVersion: v2
     appVersion: 1.1.0
-    created: "2025-06-23T13:43:48.149203+02:00"
+    created: "2025-07-04T11:53:21.754004+02:00"
     description: Simple firewall/router KNF implemented with iproute2 and iptables
     digest: b0c8f729ca1ecc77b9edd1a4250386487198ba2ba40f5e067362af1ec01397b9
     name: router-knf
@@ -77,7 +97,7 @@ entries:
     version: 1.1.0
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-06-23T13:43:48.149006+02:00"
+    created: "2025-07-04T11:53:21.753704+02:00"
     description: Simple firewall/router KNF implemented with iproute2 and iptables
     digest: 76fddcf1f9fb3e192a3b88900db6a7d0c5b1007fe75048186f346490dd7bd9f3
     name: router-knf
@@ -87,8 +107,18 @@ entries:
     version: 1.0.0
   web-server-knf:
   - apiVersion: v2
+    appVersion: 1.5.0
+    created: "2025-07-04T11:53:21.754705+02:00"
+    description: Chart for executing the different web server KNFs based on Apache
+    digest: ed67baa135f102d828254e2260fce4c33a9c8abfb4ad62cb24ab45f93a75d4b4
+    name: web-server-knf
+    type: application
+    urls:
+    - https://borjand.github.io/bdorado-nfvsec-repo/web-server-knf-1.5.0.tgz
+    version: 1.5.0
+  - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-06-23T13:43:48.149443+02:00"
+    created: "2025-07-04T11:53:21.754505+02:00"
     description: Chart for executing the different web server KNFs based on Apache
     digest: 161c43c52f6ac0eab8701539bdb23b8157d53b8e1ac5677d2e478eddeb36668f
     name: web-server-knf
@@ -96,4 +126,4 @@ entries:
     urls:
     - https://borjand.github.io/bdorado-nfvsec-repo/web-server-knf-1.0.0.tgz
     version: 1.0.0
-generated: "2025-06-23T13:43:48.14719+02:00"
+generated: "2025-07-04T11:53:21.750452+02:00"

@@ -1,0 +1,33 @@
+# Default values for load-balancer-knf.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+replicaCount: 1
+
+image:
+  repository: bdorado/simple-loadbalancer
+  tag: latest
+  pullPolicy: IfNotPresent
+
+network:
+  name: video-l2-net
+  ip: 10.78.0.11
+  subnetMask: /24
+
+backendServers:
+  - ip: 10.78.0.101
+  - ip: 10.78.0.102
+  - ip: 10.78.0.103
+
+nodeSelector:
+  kubernetes.io/hostname: microk8s-cluster-1
+
+secAgent:
+  image: bdorado/nfvsec-agent:latest 
+  vnfId: VNF_LOADBALANCER
+  brokerAddress: kafka.default.svc.cluster.local:9092
+  publicKey: vnflb-PKEY
+  fgTopic: vnffg_topic
+  timeout: 1000
+  mechanisms: MACsec/manual

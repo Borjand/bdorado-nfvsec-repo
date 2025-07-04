@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: haproxy-lb
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [{
+        "name": "{{ .Values.network.name }}",
+        "interface": "net1",
+        "ips": ["{{ .Values.network.ip }}{{ .Values.network.subnetMask }}"]
+      }]
+spec:
+  nodeSelector:
+    {{- toYaml .Values.nodeSelector | nindent 4 }}
+  containers:
+    - name: haproxy
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      volumeMounts:
+        - name: haproxy-conf
+          mountPath: /usr/local/etc/haproxy
+      ports:
+        - containerPort: 80
+  
+  volumes:
+    - name: haproxy-conf
+      configMap:
+        name: haproxy-config

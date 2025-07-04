@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: router
+  annotations:
+    k8s.v1.cni.cncf.io/networks: {{ list
+      (dict "name" (index .Values.interfaces 0).name "interface" "net1" "ips" (list (printf "%s%s" (index .Values.interfaces 0).ip (index .Values.interfaces 0).subnet)))
+      (dict "name" (index .Values.interfaces 1).name "interface" "net2" "ips" (list (printf "%s%s" (index .Values.interfaces 1).ip (index .Values.interfaces 1).subnet)))
+      | toJson | quote }}
+spec:
+  nodeSelector:
+    {{- toYaml .Values.nodeSelector | nindent 4 }}
+  containers:
+    - name: router
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        privileged: true
+      env:
+        - name: ALLOWED_PORT
+          value: "{{ .Values.env.ALLOWED_PORT }}"
+      command:
+        - /bin/sh
+        - -c
+        - |
+          # Ejecutar script del firewall
+          /usr/local/bin/rules.sh &
+
+          # Eliminar rutas preexistentes si las hay
+          ip route del 10.88.0.0/24 via 10.78.0.10 dev net1 2>/dev/null || true
+          ip route del 10.98.0.0/24 via 10.78.0.10 dev net1 2>/dev/null || true
+
+          # Añadir rutas nuevas
+          {{- range .Values.routes }}
+          # ip route add {{ .dst }} via {{ .gw }} dev net2
+          {{- end }}
+
+          echo "Router configurado con reglas y rutas estáticas"
+          sleep infinity

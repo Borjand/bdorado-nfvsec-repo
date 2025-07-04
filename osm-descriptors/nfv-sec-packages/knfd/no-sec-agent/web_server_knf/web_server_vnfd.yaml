@@ -1,0 +1,18 @@
+vnfd:
+  description: Web server KNF (with 3 replicas)  with single KDU using a helm-chart
+  df:
+  - id: default-df
+  ext-cpd:
+  - id: mgmt-ext
+    k8s-cluster-net: mgmtnet
+  id: web_server_knf2
+  k8s-cluster:
+    nets:
+    - id: mgmtnet
+  kdu:
+  - name: web_server_knf
+    helm-chart: https://borjand.github.io/bdorado-nfvsec-repo/web-server-knf-1.5.0.tgz
+  mgmt-cp: mgmt-ext
+  product-name: web_server_knf2
+  provider: uc3m
+  version: 1.0
