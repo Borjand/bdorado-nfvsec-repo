@@ -12,6 +12,8 @@ spec:
       labels:
         app: kafka
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: microk8s-cluster-1
       containers:
         - name: kafka
           image: {{ .Values.kafka.image }}

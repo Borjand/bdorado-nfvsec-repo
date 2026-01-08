@@ -7,7 +7,7 @@ import logging
 from kafka import KafkaProducer
 
 app = FastAPI()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
 
 BROKER_ADDRESS = os.getenv("BROKER_ADDRESS", "localhost:9092")
 

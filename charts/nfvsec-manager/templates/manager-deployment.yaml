@@ -12,9 +12,12 @@ spec:
       labels:
         app: security-manager
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: microk8s-cluster-1
       containers:
         - name: manager
           image: {{ .Values.manager.image }}
+          imagePullPolicy: Always
           ports:
             - containerPort: {{ .Values.manager.port }}
           env:

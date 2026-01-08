@@ -12,9 +12,12 @@ spec:
       labels:
         app: zookeeper
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: microk8s-cluster-1
       containers:
         - name: zookeeper
-          image: {{ .Values.kafka.zookeeperImage }}
+          image: docker.io/bitnami/zookeeper@sha256:4d450d4b1dab610e1012993d2ea78ba00a516b63e74214a57fef40c060ce4986
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: {{ .Values.kafka.zookeeperPort }}
           env:
