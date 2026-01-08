@@ -1,0 +1,52 @@
+{{- $n := int (.Values.iterator | default 0) -}}
+{{- $subnet := required "network.subnet es obligatorio (ej: 10.78.0.0/24)" .Values.network.subnet -}}
+{{- $ipAndMask := splitList "/" $subnet -}}
+{{- $netIp := index $ipAndMask 0 -}}          {{/* 10.78.0.0 */}}
+{{- $mask := index $ipAndMask 1 -}}           {{/* 24 */}}
+{{- $parts := splitList "." $netIp -}}
+{{- $prefix := printf "%s.%s.%s" (index $parts 0) (index $parts 1) (index $parts 2) -}}
+
+{{- range $i := until $n }}
+{{- $iter := add $i 1 -}}                      {{/* 1..N */}}
+{{- $lastOctet := add 50 $iter -}}             {{/* 51, 52, ... */}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sec-agent-{{ $iter }}
+  labels:
+    app: sec-agent
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [{
+        "name": "{{ $.Values.network.name }}",
+        "interface": "net1",
+        "ips": ["{{ $prefix }}.{{ $lastOctet }}/{{ $mask }}"]
+      }]
+spec:
+  nodeSelector:
+    {{- toYaml $.Values.nodeSelector | nindent 4 }}
+  containers:
+    - name: sec-agent
+      image: "{{ $.Values.secAgent.image }}"
+      imagePullPolicy: Always
+      env:
+        - name: VNF_ID
+          value: "{{ printf "VNF_SECAGENT_%d" $iter }}"
+        - name: BROKER_ADDRESS
+          value: "{{ $.Values.secAgent.brokerAddress }}"
+        - name: PUBLIC_KEY
+          value: "{{ printf "vnfsec-PKEY-%d" $iter }}"
+        - name: VNF_FG_TOPIC
+          value: "{{ $.Values.secAgent.fgTopic }}"
+        - name: DECLARATION_TIMEOUT_MS
+          value: "{{ $.Values.secAgent.timeout }}"
+        - name: PREFERRED_MECHANISMS
+          value: "{{ $.Values.secAgent.mechanisms }}"
+        - name: PROTECTED_SUBNET
+          value: "{{ $.Values.secAgent.subnet }}"
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
+---
+{{- end }}
