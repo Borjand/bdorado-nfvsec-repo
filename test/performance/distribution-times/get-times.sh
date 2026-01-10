@@ -146,6 +146,7 @@ get_agent_pod_name() {
   echo "sec-agent-${i}"
 }
 
+
 # =======================
 # Extracción de timestamps de sec-agents
 # =======================
@@ -196,6 +197,26 @@ te = datetime.strptime(e, fmt).replace(tzinfo=timezone.utc)
 print(int((te - tm).total_seconds() * 1000))
 PY
 }
+
+# =======================
+# Cleanup on exit (always)
+# =======================
+cleanup() {
+  log "Cleanup: uninstalling Helm releases"
+
+  helm_uninstall_if_exists "${AGENTS_RELEASE}" || true
+  helm_uninstall_if_exists "${MANAGER_RELEASE}" || true
+
+  # Best-effort wait for pods to disappear
+  wait_pods_gone_by_prefix "sec-agent-" 90 || true
+  wait_pods_gone_by_prefix "security-manager-" 90 || true
+
+  log "Cleanup completed"
+}
+
+# Ensure cleanup runs on normal exit, error, or Ctrl+C
+trap cleanup EXIT INT TERM
+
 
 # =======================
 # CSV header (separator ;)
