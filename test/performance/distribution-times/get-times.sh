@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# para activar alias de microk8s kubectl en bash
+shopt -s expand_aliases
+alias kubectl='microk8s kubectl'
+
 # =======================
 # Configuración
 # =======================
 KUBECONFIG_PATH="../../../microk8s-site1-kubeconfig.yaml"
 NAMESPACE="${NAMESPACE:-default}"
-
 
 # Nº de sec-agents (iterator)
 N_AGENTS="${N_AGENTS:-4}"
@@ -32,9 +35,11 @@ VL_ID="${VL_ID:-ns_001.vl_001}"
 # Marker en logs del manager para inicio de medida
 MANAGER_MARKER_REGEX="${MANAGER_MARKER_REGEX:-Topology published successfully}"
 
+# Marker en logs del sec-agent para medir "negociación"
+AGENT_NEGOTIATION_MARKER_REGEX="${AGENT_NEGOTIATION_MARKER_REGEX:-Configuring MACsec for}"
+
 OUTDIR="${OUTDIR:-./results}"
 CSV_OUT="${OUTDIR}/distribution_times_${N_AGENTS}_agents.csv"
-
 
 mkdir -p "${OUTDIR}"
 
@@ -141,7 +146,11 @@ get_agent_pod_name() {
   echo "sec-agent-${i}"
 }
 
-# Último timestamp presente en el log (sin tac)
+# =======================
+# Extracción de timestamps de sec-agents
+# =======================
+
+# Último timestamp presente en el log del pod (para "total")
 get_last_ts_from_pod_logs() {
   local pod="$1"
   kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" logs "${pod}" 2>/dev/null \
@@ -153,32 +162,46 @@ get_last_ts_from_pod_logs() {
       '
 }
 
+# Último timestamp de una línea que contenga un marker (para "negociación")
+get_last_ts_matching_from_pod_logs() {
+  local pod="$1"
+  local pattern="$2"
+
+  kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" logs "${pod}" 2>/dev/null \
+    | awk -v pat="$pattern" '
+        $0 ~ pat && match($0, /^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}\]/) {
+          ts=substr($0,2,23)
+        }
+        END { if (ts!="") print ts }
+      '
+}
+
 # =======================
 # Cálculo de diferencia con Python (portable macOS)
 # =======================
 calc_duration_ms() {
   local manager_ts="$1"
-  local agent_ts="$2"
+  local end_ts="$2"
 
-  python3 - <<'PY' "${manager_ts}" "${agent_ts}"
+  python3 - <<'PY' "${manager_ts}" "${end_ts}"
 import sys
 from datetime import datetime, timezone
 
 m = sys.argv[1]
-a = sys.argv[2]
+e = sys.argv[2]
 fmt = "%Y-%m-%d %H:%M:%S,%f"
 
 tm = datetime.strptime(m, fmt).replace(tzinfo=timezone.utc)
-ta = datetime.strptime(a, fmt).replace(tzinfo=timezone.utc)
-print(int((ta - tm).total_seconds() * 1000))
+te = datetime.strptime(e, fmt).replace(tzinfo=timezone.utc)
+print(int((te - tm).total_seconds() * 1000))
 PY
 }
 
 # =======================
-# CSV header
+# CSV header (separator ;)
 # =======================
 if [[ ! -f "${CSV_OUT}" ]]; then
-  echo "run,n_agents,manager_ts_utc,agent_max_ts_utc,duration_ms" > "${CSV_OUT}"
+  echo "run;n_agents;manager_ts_utc;agent_neg_max_ts_utc;negotiation_ms;agent_last_max_ts_utc;total_ms" > "${CSV_OUT}"
 fi
 
 # =======================
@@ -222,7 +245,7 @@ for run in $(seq 1 "${REPEATS}"); do
   manager_pod="$(get_manager_pod_name || true)"
   if [[ -z "${manager_pod}" ]]; then
     log "ERROR: No pude detectar el pod del manager (prefijo security-manager-)."
-    echo "${run},${N_AGENTS},NA,NA,NA" >> "${CSV_OUT}"
+    echo "${run};${N_AGENTS};NA;NA;NA;NA;NA" >> "${CSV_OUT}"
     continue
   fi
   log "Manager pod: ${manager_pod}"
@@ -235,43 +258,67 @@ for run in $(seq 1 "${REPEATS}"); do
 
   if [[ -z "${manager_line}" ]]; then
     log "ERROR: No encontré el marker en logs del manager: ${MANAGER_MARKER_REGEX}"
-    echo "${run},${N_AGENTS},NA,NA,NA" >> "${CSV_OUT}"
+    echo "${run};${N_AGENTS};NA;NA;NA;NA;NA" >> "${CSV_OUT}"
     continue
   fi
 
   manager_ts="$(echo "${manager_line}" | extract_ts_from_line || true)"
   if [[ -z "${manager_ts}" ]]; then
     log "ERROR: No pude extraer timestamp del manager en: ${manager_line}"
-    echo "${run},${N_AGENTS},NA,NA,NA" >> "${CSV_OUT}"
+    echo "${run};${N_AGENTS};NA;NA;NA;NA;NA" >> "${CSV_OUT}"
     continue
   fi
 
-  # Obtener el timestamp más tardío entre agentes
-  agent_max_ts=""
+  # Obtener el timestamp más tardío entre agentes para:
+  # 1) negociación: marker "Configuring MACsec for"
+  # 2) total: último timestamp del log
+  neg_max_ts=""
+  total_max_ts=""
+
   for i in $(seq 1 "${N_AGENTS}"); do
     pod="$(get_agent_pod_name "${i}")"
-    ts="$(get_last_ts_from_pod_logs "${pod}" || true)"
-    if [[ -z "${ts}" ]]; then
-      log "WARN: No pude extraer timestamp de ${pod}"
-      continue
+
+    # Negotiation marker timestamp (per pod)
+    neg_ts="$(get_last_ts_matching_from_pod_logs "${pod}" "${AGENT_NEGOTIATION_MARKER_REGEX}" || true)"
+    if [[ -z "${neg_ts}" ]]; then
+      log "WARN: No pude extraer timestamp (negotiation marker) de ${pod} con patrón: ${AGENT_NEGOTIATION_MARKER_REGEX}"
+    else
+      if [[ -z "${neg_max_ts}" || "${neg_ts}" > "${neg_max_ts}" ]]; then
+        neg_max_ts="${neg_ts}"
+      fi
     fi
 
-    # Lexicográfico funciona con este formato
-    if [[ -z "${agent_max_ts}" || "${ts}" > "${agent_max_ts}" ]]; then
-      agent_max_ts="${ts}"
+    # Total end timestamp (per pod)
+    end_ts="$(get_last_ts_from_pod_logs "${pod}" || true)"
+    if [[ -z "${end_ts}" ]]; then
+      log "WARN: No pude extraer último timestamp de ${pod}"
+    else
+      if [[ -z "${total_max_ts}" || "${end_ts}" > "${total_max_ts}" ]]; then
+        total_max_ts="${end_ts}"
+      fi
     fi
   done
 
-  if [[ -z "${agent_max_ts}" ]]; then
-    log "ERROR: No pude obtener timestamps de agentes."
-    echo "${run},${N_AGENTS},${manager_ts},NA,NA" >> "${CSV_OUT}"
-    continue
+  negotiation_ms="NA"
+  total_ms="NA"
+
+  if [[ -n "${neg_max_ts}" ]]; then
+    negotiation_ms="$(calc_duration_ms "${manager_ts}" "${neg_max_ts}")"
+  else
+    log "ERROR: No pude obtener ningún timestamp de negociación (marker) de los agentes."
   fi
 
-  duration_ms="$(calc_duration_ms "${manager_ts}" "${agent_max_ts}")"
-  log "Manager marker: ${manager_ts} | Agent max end: ${agent_max_ts} | Duration: ${duration_ms} ms"
+  if [[ -n "${total_max_ts}" ]]; then
+    total_ms="$(calc_duration_ms "${manager_ts}" "${total_max_ts}")"
+  else
+    log "ERROR: No pude obtener ningún timestamp final (último log) de los agentes."
+  fi
 
-  echo "${run},${N_AGENTS},${manager_ts},${agent_max_ts},${duration_ms}" >> "${CSV_OUT}"
+  log "Manager marker: ${manager_ts}"
+  log "Negotiation end (max across agents): ${neg_max_ts:-NA} | negotiation_ms: ${negotiation_ms}"
+  log "Total end (max across agents):       ${total_max_ts:-NA} | total_ms:       ${total_ms}"
+
+  echo "${run};${N_AGENTS};${manager_ts};${neg_max_ts:-NA};${negotiation_ms};${total_max_ts:-NA};${total_ms}" >> "${CSV_OUT}"
 done
 
 log "Terminado. CSV: ${CSV_OUT}"

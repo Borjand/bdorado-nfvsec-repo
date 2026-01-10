@@ -12,10 +12,17 @@ WORKDIR /app
 # Install required Python packages
 RUN pip install --no-cache-dir \
     kafka-python \
-    pyroute2
+    pyroute2 \
+    cryptography
 
 # Copy the security agent script into the container
 COPY main.py .
+
+# Copy keys (fixed for experimentation)
+COPY keys/ /app/keys/
+RUN chmod -R 444 /app/keys
+
+ENV KEYS_DIR=/app/keys
 
 # Define the default command to run the agent
 CMD ["python", "main.py"]

@@ -9,6 +9,17 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from pyroute2 import IPRoute
 
+import json
+import base64
+from typing import Dict, Any
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding as asy_padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
+
 # --- Logging setup ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,6 +38,18 @@ declaration_timeout = int(os.getenv("DECLARATION_TIMEOUT_MS", "1000"))
 preferred_mechanisms = os.getenv("PREFERRED_MECHANISMS", "MACsec/manual,IPsec/manual").split(',')
 protected_subnet = os.getenv("PROTECTED_SUBNET")  # Optional, only for IPsec
 
+# --- Crypto emulation config ---
+EMULATE_CRYPTO = os.getenv("EMULATE_CRYPTO", "1") == "1"
+KEYS_DIR = os.getenv("KEYS_DIR", "/app/keys")
+
+# Fixed N values used in experiments
+N_SET = [2, 4, 8, 16, 32, 64]
+
+SESSION_KEY_FILE = os.path.join(KEYS_DIR, "session_key.b64")
+RSA_PRIV_FILE = os.path.join(KEYS_DIR, "rsa_priv.pem")     # agent private key (unwrap)
+RSA_PUB_FILE = os.path.join(KEYS_DIR, "rsa_pub.pem")       # public key (wrap)
+SIGN_PRIV_FILE = os.path.join(KEYS_DIR, "sign_priv.pem")   # signing private key
+SIGN_PUB_FILE = os.path.join(KEYS_DIR, "sign_pub.pem")     # signature verify public key
 
 # --- Wait for Kafka to become available ---
 def wait_for_kafka(broker, retries=10, delay=2):
@@ -44,6 +67,58 @@ def wait_for_kafka(broker, retries=10, delay=2):
             logger.warning(f"Kafka not available, retrying in {delay}s (attempt {attempt + 1}/{retries})")
             time.sleep(delay)
     raise RuntimeError("Kafka not available after maximum retries.")
+
+def _canonical_json_bytes(obj: Any) -> bytes:
+    """Stable JSON bytes (sorted keys, no whitespace) to keep crypto cost consistent."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+def _load_session_key() -> bytes:
+    with open(SESSION_KEY_FILE, "rb") as f:
+        key = base64.b64decode(f.read().strip())
+    if len(key) != 32:
+        raise ValueError(f"session_key must be 32 bytes, got {len(key)}")
+    return key
+
+def _load_rsa_private_key() -> RSAPrivateKey:
+    with open(RSA_PRIV_FILE, "rb") as f:
+        k = serialization.load_pem_private_key(f.read(), password=None)
+    if not isinstance(k, RSAPrivateKey):
+        raise TypeError("rsa_priv.pem is not an RSA private key")
+    return k
+
+def _load_rsa_public_key() -> RSAPublicKey:
+    with open(RSA_PUB_FILE, "rb") as f:
+        k = serialization.load_pem_public_key(f.read())
+    if not isinstance(k, RSAPublicKey):
+        raise TypeError("rsa_pub.pem is not an RSA public key")
+    return k
+
+def _load_ed25519_private_key() -> Ed25519PrivateKey:
+    with open(SIGN_PRIV_FILE, "rb") as f:
+        k = serialization.load_pem_private_key(f.read(), password=None)
+    if not isinstance(k, Ed25519PrivateKey):
+        raise TypeError("sign_priv.pem is not an Ed25519 private key")
+    return k
+
+def _load_ed25519_public_key() -> Ed25519PublicKey:
+    with open(SIGN_PUB_FILE, "rb") as f:
+        k = serialization.load_pem_public_key(f.read())
+    if not isinstance(k, Ed25519PublicKey):
+        raise TypeError("sign_pub.pem is not an Ed25519 public key")
+    return k
+
+# --- Load keys once (fail fast) ---
+SESSION_KEY = _load_session_key()
+RSA_PRIV = _load_rsa_private_key()
+RSA_PUB = _load_rsa_public_key()
+SIGN_PRIV = _load_ed25519_private_key()
+SIGN_PUB = _load_ed25519_public_key()
+
+# --- Precomputed blobs (built at startup) ---
+PRECOMP_TOPOLOGY: Dict[int, Dict[str, bytes]] = {}
+PRECOMP_DECLARATION: Dict[int, Dict[str, bytes]] = {}
+
+
 
 # --- Generate symmetric key for MACsec---
 def get_random_key(n_bits):
@@ -440,6 +515,11 @@ def security_agent_worker(vl, interface, prefixlen):
     if len(declarations) < expected_declarations:
         logger.warning(f"Only received {len(declarations)} declarations, expected {expected_declarations}")
 
+    # Emulate crypto cost for receiving peer declarations (n_agents = expected_declarations)
+    # expected_declarations includes self, so peers = expected_declarations - 1 inside helper
+    if expected_declarations in PRECOMP_DECLARATION:
+        emulate_receive_peer_declarations(expected_declarations)
+
     selected = select_security_mechanism(declarations, preferred_mechanisms)
     logger.info(f"Selected security mechanism for {vl['vl_id']}: {selected}")
 
@@ -452,9 +532,201 @@ def security_agent_worker(vl, interface, prefixlen):
     else:
         logger.warning(f"[{vl['vl_id']}] No implementation for selected mechanism: {selected}")
 
+def _dummy_topology(n_agents: int) -> Any:
+    """Topology-like JSON similar to your real HTTP payload."""
+    return [
+        {
+            "vl_id": "ns_dummy.vl_dummy",
+            "neighbours": [
+                {"vnf_id": f"VNF_SECAGENT_{i}", "interface": "net1", "publickey": f"vnfsec-PKEY-{i}"}
+                for i in range(1, n_agents + 1)
+            ],
+        }
+    ]
+
+def _dummy_declaration(n_agents: int) -> Any:
+    """
+    Declaration-like JSON (size roughly similar to a real one).
+    n_agents is only used to keep variability if you want; structure stays stable.
+    """
+    return {
+        "vnf_id": "VNF_SECAGENT_X",
+        "security_mechanisms": [
+            {"mechanism": "MACsec/manual", "parameters": {"MAC_address": "aa:bb:cc:dd:ee:ff", "key": "00"*16, "key_id": "00"}}
+        ],
+        "digital_signature": "",
+        "n_agents_hint": n_agents,
+    }
+
+# Block to emulate receiving topology and declarations PGP-like protected
+def _precompute_for_n(n: int) -> None:
+    # --- Topology blob ---
+    topo = _dummy_topology(n)
+    aes = AESGCM(SESSION_KEY)
+    topo_nonce = os.urandom(12)
+    topo_ct = aes.encrypt(topo_nonce, _canonical_json_bytes(topo), None)
+
+    # Wrapped session key (agent would receive this and unwrap with RSA_PRIV)
+    topo_wrapped = RSA_PUB.encrypt(
+        SESSION_KEY,
+        asy_padding.OAEP(
+            mgf=asy_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+
+    topo_envelope = {
+        "nonce": base64.b64encode(topo_nonce).decode(),
+        "ciphertext": base64.b64encode(topo_ct).decode(),
+        "wrapped": base64.b64encode(topo_wrapped).decode(),
+        "n": n,
+        "kind": "topology",
+    }
+    topo_sig = SIGN_PRIV.sign(_canonical_json_bytes(topo_envelope))
+
+    PRECOMP_TOPOLOGY[n] = {
+        "nonce": topo_nonce,
+        "ciphertext": topo_ct,
+        "wrapped": topo_wrapped,
+        "sig": topo_sig,
+        "signed_bytes": _canonical_json_bytes(topo_envelope),
+    }
+
+    # --- Declaration blob ---
+    dec = _dummy_declaration(n)
+    dec_nonce = os.urandom(12)
+    dec_ct = aes.encrypt(dec_nonce, _canonical_json_bytes(dec), None)
+
+    dec_wrapped = RSA_PUB.encrypt(
+        SESSION_KEY,
+        asy_padding.OAEP(
+            mgf=asy_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+
+    dec_envelope = {
+        "nonce": base64.b64encode(dec_nonce).decode(),
+        "ciphertext": base64.b64encode(dec_ct).decode(),
+        "wrapped": base64.b64encode(dec_wrapped).decode(),
+        "n": n,
+        "kind": "declaration",
+    }
+    dec_sig = SIGN_PRIV.sign(_canonical_json_bytes(dec_envelope))
+
+    PRECOMP_DECLARATION[n] = {
+        "nonce": dec_nonce,
+        "ciphertext": dec_ct,
+        "wrapped": dec_wrapped,
+        "sig": dec_sig,
+        "signed_bytes": _canonical_json_bytes(dec_envelope),
+    }
+
+def precompute_all() -> None:
+    logger.info("Precomputing crypto blobs for N in {2,4,8,16,32,64} (startup)")
+    for n in N_SET:
+        _precompute_for_n(n)
+    logger.info("Precomputation completed")
+
+
+def emulate_receive_from_manager(n_agents: int) -> None:
+    """
+    SA receives topology from SM:
+      - unwrap session key with RSA private key
+      - decrypt payload with AES-GCM
+      - verify signature with SM public key (or shared verify key)
+    Uses precomputed blobs (no runtime encryption).
+    """
+    if not EMULATE_CRYPTO:
+        return
+
+    blob = PRECOMP_TOPOLOGY[n_agents]
+    logger.info(f"[CRYPTO] Topology emulation: unwrap+decrypt+verify (n_agents={n_agents})")
+
+    # unwrap
+    RSA_PRIV.decrypt(
+        blob["wrapped"],
+        asy_padding.OAEP(
+            mgf=asy_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+
+    # decrypt
+    aes = AESGCM(SESSION_KEY)
+    aes.decrypt(blob["nonce"], blob["ciphertext"], None)
+
+    # verify signature
+    SIGN_PUB.verify(blob["sig"], blob["signed_bytes"])
+
+def emulate_publish_declaration(n_agents: int) -> None:
+    """
+    SA publishes its declaration:
+      - symmetric encrypt once (precomputed)
+      - wrap session key for recipients: n_agents (Adjunct included, but self excluded => n_agents)
+      - sign
+    NOTE: We emulate the RSA wraps in runtime because that's the part that scales with recipients.
+          We still avoid encrypting declaration bytes in runtime (ciphertext is precomputed).
+    """
+    if not EMULATE_CRYPTO:
+        return
+
+    logger.info(f"[CRYPTO] Declaration publish emulation: encrypt(precomp)+wrap(n={n_agents})+sign (self excluded)")
+
+    # Wrap session key N times (Adjunct included, self excluded => N)
+    for _ in range(n_agents):
+        RSA_PUB.encrypt(
+            SESSION_KEY,
+            asy_padding.OAEP(
+                mgf=asy_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+
+    # Sign something "envelope-like" (use precomputed bytes so sign cost stays consistent)
+    blob = PRECOMP_DECLARATION[n_agents]
+    SIGN_PRIV.sign(blob["signed_bytes"])
+
+
+def emulate_receive_peer_declarations(n_agents: int) -> None:
+    """
+    SA receives (n_agents - 1) peer declarations:
+      - for each peer: unwrap + decrypt + verify
+    Uses precomputed declaration blobs to avoid runtime encryption.
+    """
+    if not EMULATE_CRYPTO:
+        return
+
+    blob = PRECOMP_DECLARATION[n_agents]
+    aes = AESGCM(SESSION_KEY)
+
+    peers = max(0, n_agents - 1)
+    logger.info(f"[CRYPTO] Receiving peer declarations emulation: (peers={peers}) x (unwrap+decrypt+verify)")
+
+    for _ in range(peers):
+        RSA_PRIV.decrypt(
+            blob["wrapped"],
+            asy_padding.OAEP(
+                mgf=asy_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+        aes.decrypt(blob["nonce"], blob["ciphertext"], None)
+        SIGN_PUB.verify(blob["sig"], blob["signed_bytes"])
+
 
 # --- Main logic ---
 def main():
+
+    # Generate protected and signed content
+    precompute_all()
+    logger.info(f"Crypto emulation enabled: {EMULATE_CRYPTO}")
+
     wait_for_kafka(broker_address)
 
     producer = KafkaProducer(
@@ -473,6 +745,16 @@ def main():
 
     for vnf_fg in consumer:
         vnf_fg = vnf_fg.value
+        # Compute distinct agents (across all VLs) for this topology message
+        vnf_ids = {n["vnf_id"] for vl in vnf_fg for n in vl["neighbours"]}
+        n_agents = len(vnf_ids)
+        logger.info(f"Topology message received: distinct n_agents={n_agents}")
+
+        if n_agents not in PRECOMP_TOPOLOGY:
+            logger.warning(f"Topology n_agents={n_agents} not in {N_SET}, skipping crypto emulation for this message")
+        else:
+            emulate_receive_from_manager(n_agents)
+        
         for vl in vnf_fg:
             for index, neighbour in enumerate(vl['neighbours']):
                 if neighbour['vnf_id'] == vnf_id:
@@ -497,6 +779,9 @@ def main():
                     spi = generate_spi(vnf_id)
 
                     declaration = build_declaration(preferred_mechanisms, interface, index)
+
+                    if n_agents in PRECOMP_DECLARATION:
+                        emulate_publish_declaration(n_agents)
 
                     producer.send(vl['vl_id'], value=declaration)
                     producer.flush()

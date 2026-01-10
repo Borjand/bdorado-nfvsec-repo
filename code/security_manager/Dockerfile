@@ -2,9 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+RUN pip install fastapi kafka-python uvicorn cryptography
+
 COPY main.py ./
 
-RUN pip install fastapi kafka-python uvicorn
+# Copy keys (fixed for experimentation)
+COPY keys/ /app/keys/
+RUN chmod -R 444 /app/keys
+
+ENV KEYS_DIR=/app/keys
 
 ENV BROKER_ADDRESS=kafka:9092
 
